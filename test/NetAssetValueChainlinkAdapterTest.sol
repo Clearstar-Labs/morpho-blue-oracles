@@ -8,7 +8,7 @@ import {MorphoChainlinkOracleV2} from "../src/morpho-chainlink/MorphoChainlinkOr
 import "../src/fxusd-nav-adapter/NetAssetValueChainlinkAdapter.sol";
 
 contract NetAssetValueChainlinkAdapterTest is Test {
-    INetAssetValue internal constant fxUSD = INetAssetValue(0x7743e50F534a7f9F1791DdE7dCD89F7783Eefc39);
+    INetAssetValue internal constant fxToken = INetAssetValue(0x7743e50F534a7f9F1791DdE7dCD89F7783Eefc39);
 
     NetAssetValueChainlinkAdapter internal adapter;
     MorphoChainlinkOracleV2 internal morphoOracle;
@@ -19,12 +19,12 @@ contract NetAssetValueChainlinkAdapterTest is Test {
         require(block.chainid == 1, "chain isn't Ethereum");
         
         // Get the current NAV and set maxCap to 2x that value
-        uint256 currentNav = fxUSD.nav();
+        uint256 currentNav = fxToken.nav();
         maxCap = currentNav * 2;
         console2.log("Current NAV:", currentNav);
         console2.log("Max Cap:", maxCap);
         
-        adapter = new NetAssetValueChainlinkAdapter(fxUSD, maxCap);
+        adapter = new NetAssetValueChainlinkAdapter(fxToken, maxCap);
         morphoOracle = new MorphoChainlinkOracleV2(
             vaultZero, 1, AggregatorV3Interface(address(adapter)), feedZero, 18, vaultZero, 1, feedZero, feedZero, 18
         );
@@ -44,14 +44,14 @@ contract NetAssetValueChainlinkAdapterTest is Test {
             adapter.latestRoundData();
         console2.log("Answer from adapter:", uint256(answer));
         assertEq(roundId, 0);
-        assertEq(uint256(answer), fxUSD.nav());
-        console2.log("fxUSD.nav():", fxUSD.nav());
+        assertEq(uint256(answer), fxToken.nav());
+        console2.log("fxToken.nav():", fxToken.nav());
         assertEq(startedAt, 0);
         assertEq(updatedAt, 0);
         assertEq(answeredInRound, 0);
     }
 
-    function testOracleFxUSDNav() public {
+    function testOraclefxTokenNav() public {
         (, int256 expectedPrice,,,) = adapter.latestRoundData();
         assertEq(morphoOracle.price(), uint256(expectedPrice) * 10 ** (36 + 18 - 18 - 18));
     }
