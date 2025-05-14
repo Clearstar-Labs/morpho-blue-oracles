@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "./helpers/Constants.sol";
 import "../lib/forge-std/src/Test.sol";
+import "../lib/forge-std/src/console2.sol";
 import {MorphoChainlinkOracleV2} from "../src/morpho-chainlink/MorphoChainlinkOracleV2.sol";
 import "../src/fxusd-nav-adapter/FxUSDNetAssetValueChainlinkAdapter.sol";
 
@@ -30,10 +31,13 @@ contract FxUSDNetAssetValueChainlinkAdapterTest is Test {
     }
 
     function testLatestRoundData() public {
+        console.log("Testing latestRoundData");
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             adapter.latestRoundData();
+        console2.log("Answer from adapter:", uint256(answer));
         assertEq(roundId, 0);
         assertEq(uint256(answer), fxUSD.nav());
+        console2.log("fxUSD.nav():", fxUSD.nav());
         assertEq(startedAt, 0);
         assertEq(updatedAt, 0);
         assertEq(answeredInRound, 0);
