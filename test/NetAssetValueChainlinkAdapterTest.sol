@@ -12,11 +12,19 @@ contract NetAssetValueChainlinkAdapterTest is Test {
 
     NetAssetValueChainlinkAdapter internal adapter;
     MorphoChainlinkOracleV2 internal morphoOracle;
+    uint256 internal maxCap;
 
     function setUp() public {
         vm.createSelectFork(vm.envString("ETH_RPC_URL"));
         require(block.chainid == 1, "chain isn't Ethereum");
-        adapter = new NetAssetValueChainlinkAdapter(fxUSD);
+        
+        // Get the current NAV and set maxCap to 2x that value
+        uint256 currentNav = fxUSD.nav();
+        maxCap = currentNav * 2;
+        console2.log("Current NAV:", currentNav);
+        console2.log("Max Cap:", maxCap);
+        
+        adapter = new NetAssetValueChainlinkAdapter(fxUSD, maxCap);
         morphoOracle = new MorphoChainlinkOracleV2(
             vaultZero, 1, AggregatorV3Interface(address(adapter)), feedZero, 18, vaultZero, 1, feedZero, feedZero, 18
         );
@@ -31,7 +39,7 @@ contract NetAssetValueChainlinkAdapterTest is Test {
     }
 
     function testLatestRoundData() public {
-        console.log("Testing latestRoundData");
+        console2.log("Testing latestRoundData");
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             adapter.latestRoundData();
         console2.log("Answer from adapter:", uint256(answer));

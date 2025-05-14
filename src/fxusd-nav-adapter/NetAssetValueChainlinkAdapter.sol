@@ -23,9 +23,16 @@ contract NetAssetValueChainlinkAdapter is MinimalAggregatorV3Interface {
 
     /// @notice The address of token on Ethereum.
     INetAssetValue public immutable token;
+    
+    /// @notice The maximum cap for the NAV value.
+    uint256 public immutable maxCap;
 
-    constructor(INetAssetValue _token) {
+    constructor(INetAssetValue _token, uint256 _maxCap) {
         token = _token;
+        maxCap = _maxCap;
+        
+        // Ensure the current NAV is less than the max cap
+        require(token.nav() <= _maxCap, "Initial NAV exceeds max cap");
     }
 
     /// @inheritdoc MinimalAggregatorV3Interface
@@ -36,7 +43,15 @@ contract NetAssetValueChainlinkAdapter is MinimalAggregatorV3Interface {
         view
         returns (uint80, int256, uint256, uint256, uint80)
     {
+        // Get the current NAV value
+        uint256 navValue = token.nav();
+        
+        // Cap the NAV value if it exceeds the maximum
+        if (navValue > maxCap) {
+            navValue = maxCap;
+        }
+        
         // It is assumed that `token.nav()` returns a usd price with 18 decimals precision.
-        return (0, int256(token.nav()), 0, 0, 0);
+        return (0, int256(navValue), 0, 0, 0);
     }
 }
