@@ -13,6 +13,7 @@ contract NetAssetValueChainlinkAdapterTest is Test {
     NetAssetValueChainlinkAdapter internal adapter;
     MorphoChainlinkOracleV2 internal morphoOracle;
     uint256 internal maxCap;
+    address internal admin = address(1);
 
     function setUp() public {
         vm.createSelectFork(vm.envString("ETH_RPC_URL"));
@@ -24,7 +25,7 @@ contract NetAssetValueChainlinkAdapterTest is Test {
         console2.log("Current NAV:", currentNav);
         console2.log("Max Cap:", maxCap);
         
-        adapter = new NetAssetValueChainlinkAdapter(fxToken, maxCap);
+        adapter = new NetAssetValueChainlinkAdapter(fxToken, maxCap, admin);
         morphoOracle = new MorphoChainlinkOracleV2(
             vaultZero, 1, AggregatorV3Interface(address(adapter)), feedZero, 18, vaultZero, 1, feedZero, feedZero, 18
         );
@@ -67,20 +68,71 @@ contract NetAssetValueChainlinkAdapterTest is Test {
         console2.log("Too high max cap:", tooHighMaxCap);
         
         vm.expectRevert("Max cap too high");
-        new NetAssetValueChainlinkAdapter(fxToken, tooHighMaxCap);
+        new NetAssetValueChainlinkAdapter(fxToken, tooHighMaxCap, admin);
     }
     
     function testMaxCapTooLow() public {
         // Get the current NAV
         uint256 currentNav = fxToken.nav();
         
-        // Try to set maxCap below the current NAV (which should fail)
-        uint256 tooLowMaxCap = currentNav - 1;
+        // Try to set maxCap below the minimum threshold (which should fail)
+        uint256 tooLowMaxCap = currentNav * 105 / 100 - 1;
         
         console2.log("Current NAV:", currentNav);
         console2.log("Too low max cap:", tooLowMaxCap);
         
-        vm.expectRevert("Initial NAV exceeds max cap");
-        new NetAssetValueChainlinkAdapter(fxToken, tooLowMaxCap);
+        vm.expectRevert("Max cap too low");
+        new NetAssetValueChainlinkAdapter(fxToken, tooLowMaxCap, admin);
+    }
+    
+    // Add tests for the timelock functionality
+    function testProposeAndApplyMaxCap() public {
+        uint256 currentNav = fxToken.nav();
+        uint256 newMaxCap = currentNav * 4 / 3; // 133% of current NAV
+        
+        // Only admin can propose
+        vm.prank(address(2));
+        vm.expectRevert("Only admin can propose");
+        adapter.proposeMaxCap(newMaxCap);
+        
+        // Admin proposes new max cap
+        vm.prank(admin);
+        adapter.proposeMaxCap(newMaxCap);
+        
+        assertEq(adapter.proposedMaxCap(), newMaxCap);
+        assertEq(adapter.proposedMaxCapTimestamp(), block.timestamp + 2 days);
+        
+        // Cannot apply before timelock expires
+        vm.expectRevert("Timelock not expired");
+        adapter.applyMaxCap();
+        
+        // Warp to after timelock period
+        vm.warp(block.timestamp + 2 days + 1);
+        
+        // Apply the new max cap
+        adapter.applyMaxCap();
+        
+        // Verify the max cap was updated
+        assertEq(adapter.maxCap(), newMaxCap);
+        assertEq(adapter.proposedMaxCap(), 0);
+        assertEq(adapter.proposedMaxCapTimestamp(), 0);
+    }
+    
+    function testProposeMaxCapTooHigh() public {
+        uint256 currentNav = fxToken.nav();
+        uint256 tooHighMaxCap = currentNav * 3 / 2 + 1; // Just above the 150% limit
+        
+        vm.prank(admin);
+        vm.expectRevert("Max cap too high");
+        adapter.proposeMaxCap(tooHighMaxCap);
+    }
+    
+    function testProposeMaxCapTooLow() public {
+        uint256 currentNav = fxToken.nav();
+        uint256 tooLowMaxCap = currentNav * 105 / 100 - 1; // Just below the 105% limit
+        
+        vm.prank(admin);
+        vm.expectRevert("Max cap too low");
+        adapter.proposeMaxCap(tooLowMaxCap);
     }
 }
