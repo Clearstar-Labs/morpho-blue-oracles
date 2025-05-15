@@ -29,10 +29,17 @@ contract NetAssetValueChainlinkAdapter is MinimalAggregatorV3Interface {
 
     constructor(INetAssetValue _token, uint256 _maxCap) {
         token = _token;
-        maxCap = _maxCap;
+        
+        // Get the current NAV
+        uint256 currentNav = _token.nav();
         
         // Ensure the current NAV is less than the max cap
-        require(token.nav() <= _maxCap, "Initial NAV exceeds max cap");
+        require(currentNav <= _maxCap, "Initial NAV exceeds max cap");
+        
+        // Ensure the max cap is not too high (max 50% above current NAV)
+        require(_maxCap <= currentNav * 3 / 2, "Max cap too high");
+        
+        maxCap = _maxCap;
     }
 
     /// @inheritdoc MinimalAggregatorV3Interface
