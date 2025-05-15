@@ -19,9 +19,10 @@ contract NetAssetValueChainlinkAdapterTest is Test {
         vm.createSelectFork(vm.envString("ETH_RPC_URL"));
         require(block.chainid == 1, "chain isn't Ethereum");
         
-        // Get the current NAV and set maxCap to 1.5x that value (the maximum allowed)
+        // Get the current NAV and set maxCap to 1.2x that value (lower than the maximum allowed)
+        // This gives us room to increase it in tests
         uint256 currentNav = fxToken.nav();
-        maxCap = currentNav * 3 / 2;
+        maxCap = currentNav * 6 / 5; // 120% of current NAV (between 105% and 150%)
         console2.log("Current NAV:", currentNav);
         console2.log("Max Cap:", maxCap);
         
@@ -90,6 +91,15 @@ contract NetAssetValueChainlinkAdapterTest is Test {
         uint256 currentNav = fxToken.nav();
         uint256 newMaxCap = currentNav * 4 / 3; // 133% of current NAV
         
+        // Make sure the new max cap is higher than the current max cap
+        // If they happen to be equal, increase the new max cap slightly
+        if (newMaxCap <= maxCap) {
+            newMaxCap = maxCap + 1;
+        }
+        
+        // Ensure the new max cap is not too high
+        require(newMaxCap <= currentNav * 3 / 2, "Test setup error: new max cap too high");
+        
         // Only admin can propose
         vm.prank(address(2));
         vm.expectRevert("Only admin can propose");
@@ -129,10 +139,49 @@ contract NetAssetValueChainlinkAdapterTest is Test {
     
     function testProposeMaxCapTooLow() public {
         uint256 currentNav = fxToken.nav();
-        uint256 tooLowMaxCap = currentNav * 105 / 100 - 1; // Just below the 105% limit
+        
+        // First, set a lower maxCap to allow testing the "too low" condition
+        // We'll create a new adapter with a lower initial maxCap
+        uint256 lowerInitialMaxCap = currentNav * 105 / 100; // Just at the minimum threshold
+        NetAssetValueChainlinkAdapter testAdapter = new NetAssetValueChainlinkAdapter(fxToken, lowerInitialMaxCap, admin);
+        
+        // Now we'll mock the nav() function to return a higher value
+        // This will make our proposed cap (which is higher than the current maxCap)
+        // too low relative to the new NAV
+        uint256 increasedNav = currentNav * 2; // Double the NAV
+        
+        // Mock the nav() function to return the increased value
+        vm.mockCall(
+            address(fxToken),
+            abi.encodeWithSelector(INetAssetValue.nav.selector),
+            abi.encode(increasedNav)
+        );
+        
+        // Try to propose a maxCap that is higher than current maxCap but below the minimum threshold
+        // relative to the new NAV
+        uint256 proposedMaxCap = lowerInitialMaxCap + 1; // Higher than current maxCap
+        
+        // This should be less than 105% of the new NAV
+        assert(proposedMaxCap < increasedNav * 105 / 100);
         
         vm.prank(admin);
         vm.expectRevert("Max cap too low");
-        adapter.proposeMaxCap(tooLowMaxCap);
+        testAdapter.proposeMaxCap(proposedMaxCap);
+        
+        // Clear the mock
+        vm.clearMockedCalls();
+    }
+
+    function testProposeMaxCapNotHigherThanCurrent() public {
+        // Try to propose a maxCap that is equal to the current maxCap
+        vm.prank(admin);
+        vm.expectRevert("New cap must be higher than current");
+        adapter.proposeMaxCap(maxCap);
+        
+        // Try to propose a maxCap that is lower than the current maxCap
+        uint256 lowerMaxCap = maxCap - 1;
+        vm.prank(admin);
+        vm.expectRevert("New cap must be higher than current");
+        adapter.proposeMaxCap(lowerMaxCap);
     }
 }

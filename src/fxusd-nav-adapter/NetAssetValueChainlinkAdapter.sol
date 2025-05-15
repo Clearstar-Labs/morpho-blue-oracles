@@ -65,6 +65,7 @@ contract NetAssetValueChainlinkAdapter is MinimalAggregatorV3Interface {
     /// @param _newMaxCap The proposed new maxCap value.
     function proposeMaxCap(uint256 _newMaxCap) external {
         require(msg.sender == admin, "Only admin can propose");
+        require(_newMaxCap > maxCap, "New cap must be higher than current");
         
         // Get the current NAV
         uint256 currentNav = token.nav();
