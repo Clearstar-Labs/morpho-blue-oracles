@@ -71,6 +71,8 @@ interface IMorpho {
         uint256 lltv;
     }
     
+    function owner() external view returns (address);
+    function isIrmEnabled(address irm) external view returns (bool);
     function createMarket(MarketParams calldata marketParams) external returns (bytes32);
     function enableIrm(address irm) external;
     function enableLltv(uint256 lltv) external;
@@ -162,17 +164,16 @@ contract MetaMorphoV1_1Test is Test {
         );
         console.log("Pendle Oracle Address:", address(pendleOracle));
         
+        // Use existing Morpho contract
+        morpho = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb);
+        console.log("Morpho Address:", address(morpho));
+        
+        // Use existing Adaptive Curve IRM
+        irm = IIrmMock(0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC);
+        console.log("IRM Address:", address(irm));
+        
         // The rest of the setup is commented out for now
         // We'll gradually uncomment and fix parts as we verify each step works
-        
-        // // Set up mock oracle and IRM
-        // oracle = IOracleMock(deployCode("OracleMock.sol"));
-        // oracle.setPrice(ORACLE_PRICE_SCALE); // 1:1 price ratio
-        
-        // irm = IIrmMock(deployCode("IrmMock.sol"));
-        
-        // // Deploy Morpho
-        // morpho = IMorpho(deployCode("Morpho.sol", abi.encode(owner)));
         
         // // Enable IRM and LLTV on Morpho
         // morpho.enableIrm(address(irm));
@@ -199,7 +200,7 @@ contract MetaMorphoV1_1Test is Test {
         // marketParams = IMorpho.MarketParams({
         //     loanToken: address(loanToken),
         //     collateralToken: address(collateralToken),
-        //     oracle: address(oracle),
+        //     oracle: address(pendleOracle),
         //     irm: address(irm),
         //     lltv: LLTV
         // });
@@ -414,5 +415,28 @@ contract MetaMorphoV1_1Test is Test {
         
         // Check oracle decimals
         assertEq(pendleOracle.decimals(), 18, "Oracle decimals should be 18");
+    }
+
+    // Test the Morpho and IRM connections
+    function testMorphoAndIrmConnections() public {
+        // Verify Morpho contract exists
+        assertTrue(address(morpho).code.length > 0, "Morpho contract should exist");
+        
+        // Verify IRM contract exists
+        assertTrue(address(irm).code.length > 0, "IRM contract should exist");
+        
+        // Try to get Morpho owner
+        try IMorpho(address(morpho)).owner() returns (address morphoOwner) {
+            console.log("Morpho owner:", morphoOwner);
+        } catch {
+            console.log("Failed to get Morpho owner");
+        }
+        
+        // Check if IRM is enabled on Morpho
+        try IMorpho(address(morpho)).isIrmEnabled(address(irm)) returns (bool isEnabled) {
+            console.log("IRM enabled on Morpho:", isEnabled);
+        } catch {
+            console.log("Failed to check if IRM is enabled");
+        }
     }
 }
