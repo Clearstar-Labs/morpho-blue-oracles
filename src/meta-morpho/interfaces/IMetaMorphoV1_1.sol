@@ -1,11 +1,33 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity 0.8.26;
+pragma solidity 0.8.20;
 
 import {Id, MarketParams, Market, IMorpho} from "../../../lib/morpho-blue/src/interfaces/IMorpho.sol";
 import {IERC4626} from "../../../lib/openzeppelin-contracts/contracts/interfaces/IERC4626.sol";
 import {IERC20Permit} from "../../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Permit.sol";
 
-import {MarketConfig, PendingUint192, PendingAddress} from "../libraries/PendingLib.sol";
+// Define the structs directly in the interface file
+struct MarketConfig {
+    /// @notice The maximum amount of assets that can be allocated to the market.
+    uint184 cap;
+    /// @notice Whether the market is in the withdraw queue.
+    bool enabled;
+    /// @notice The timestamp at which the market can be instantly removed from the withdraw queue.
+    uint64 removableAt;
+}
+
+struct PendingUint192 {
+    /// @notice The pending value to set.
+    uint192 value;
+    /// @notice The timestamp at which the pending value becomes valid.
+    uint64 validAt;
+}
+
+struct PendingAddress {
+    /// @notice The pending value to set.
+    address value;
+    /// @notice The timestamp at which the pending value becomes valid.
+    uint64 validAt;
+}
 
 struct MarketAllocation {
     /// @notice The market to allocate.
