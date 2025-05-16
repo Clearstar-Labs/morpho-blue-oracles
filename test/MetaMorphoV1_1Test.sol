@@ -35,6 +35,9 @@ interface IMetaMorphoV1_1 {
     function totalAssets() external view returns (uint256);
     
     // Admin functions
+    function owner() external view returns (address);
+    function curator() external view returns (address);
+    function isAllocator(address allocator) external view returns (bool);
     function setCurator(address newCurator) external;
     function setIsAllocator(address allocator, bool isAllocator) external;
     
@@ -73,6 +76,7 @@ interface IMorpho {
     
     function owner() external view returns (address);
     function isIrmEnabled(address irm) external view returns (bool);
+    function isLltvEnabled(uint256 lltv) external view returns (bool);
     function createMarket(MarketParams calldata marketParams) external returns (bytes32);
     function enableIrm(address irm) external;
     function enableLltv(uint256 lltv) external;
@@ -115,7 +119,8 @@ contract MetaMorphoV1_1Test is Test {
     PendleSparkLinearDiscountOracle public pendleOracle;
     
     // Test addresses
-    address public owner;
+    address public metaMorphoOwner;
+    address public morphoOwner;
     address public curator;
     address public allocator;
     address public user;
@@ -125,7 +130,7 @@ contract MetaMorphoV1_1Test is Test {
     bytes32 public marketId;
     uint256 public constant INITIAL_SUPPLY = 1_000_000e18;
     uint256 public constant SUPPLY_CAP = 500_000e18;
-    uint256 public constant LLTV = 0.8e18; // 80% LTV
+    uint256 public constant LLTV = 0.77e18; // 77% LTV
     uint256 public constant ORACLE_PRICE_SCALE = 1e18;
     
     // Oracle parameters
@@ -136,19 +141,18 @@ contract MetaMorphoV1_1Test is Test {
         vm.createSelectFork(vm.envString("ETH_RPC_URL"));
         
         // Set up test addresses
-        owner = makeAddr("owner");
-        curator = makeAddr("curator");
+        metaMorphoOwner = address(0x30988479C2E6a03E7fB65138b94762D41a733458); // Real owner of MetaMorpho
+        morphoOwner = address(0xcBa28b38103307Ec8dA98377ffF9816C164f9AFa); // Real owner of Morpho
+        curator = address(0x72882eb5D27C7088DFA6DDE941DD42e5d184F0ef); // Real curator
         allocator = makeAddr("allocator");
         user = makeAddr("user");
         
-        vm.startPrank(owner);
-        
         // Use the real loan token instead of deploying a mock
-        loanToken = IERC20(0x21aacE56a8F21210b7E76d8eF1a77253Db85BF0a);
+        loanToken = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
         console.log("Loan Token Address:", address(loanToken));
         
         // Use USDC as collateral token
-        collateralToken = IERC20Mock(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+        collateralToken = IERC20Mock(0x21aacE56a8F21210b7E76d8eF1a77253Db85BF0a);
         console.log("Collateral Token Address:", address(collateralToken));
         
         // Deploy PendleSparkLinearDiscountOracleFactory
@@ -158,7 +162,7 @@ contract MetaMorphoV1_1Test is Test {
         // Create PendleSparkLinearDiscountOracle
         bytes32 salt = bytes32(uint256(1)); // Use a simple salt
         pendleOracle = pendleOracleFactory.createPendleSparkLinearDiscountOracle(
-            address(loanToken),
+            address(collateralToken),
             BASE_DISCOUNT_PER_YEAR,
             salt
         );
@@ -172,47 +176,57 @@ contract MetaMorphoV1_1Test is Test {
         irm = IIrmMock(0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC);
         console.log("IRM Address:", address(irm));
         
-        // The rest of the setup is commented out for now
-        // We'll gradually uncomment and fix parts as we verify each step works
+        // Use existing MetaMorpho vault
+        metaMorpho = IMetaMorphoV1_1(0x62fE596d59fB077c2Df736dF212E0AFfb522dC78);
+        console.log("MetaMorpho Vault Address:", address(metaMorpho));
         
-        // // Enable IRM and LLTV on Morpho
-        // morpho.enableIrm(address(irm));
-        // morpho.enableLltv(LLTV);
+        // Set up allocator role (curator is already set)
+        vm.prank(metaMorphoOwner);
+        metaMorpho.setIsAllocator(allocator, true);
         
-        // // Deploy MetaMorpho vault
-        // bytes memory constructorArgs = abi.encode(
-        //     owner,
-        //     address(morpho),
-        //     1 days, // initialTimelock
-        //     address(loanToken),
-        //     "MetaMorpho Test Vault",
-        //     "MTV"
-        // );
-        // metaMorpho = IMetaMorphoV1_1(deployCode("MetaMorphoV1_1.sol", constructorArgs));
+        // // Enable LLTV on Morpho if not already enabled
+        console.log("Morpho Owner:", morphoOwner);
         
-        // // Set up roles
-        // metaMorpho.setCurator(curator);
-        // metaMorpho.setIsAllocator(allocator, true);
+        vm.prank(morphoOwner);
+        if (!morpho.isLltvEnabled(LLTV)) {
+            morpho.enableLltv(LLTV);
+        }
         
-        vm.stopPrank();
+        // Set up market parameters
+        marketParams = IMorpho.MarketParams({
+            loanToken: address(loanToken),
+            collateralToken: address(collateralToken),
+            oracle: address(pendleOracle),
+            irm: address(irm),
+            lltv: LLTV
+        });
         
-        // // Set up market parameters
-        // marketParams = IMorpho.MarketParams({
-        //     loanToken: address(loanToken),
-        //     collateralToken: address(collateralToken),
-        //     oracle: address(pendleOracle),
-        //     irm: address(irm),
-        //     lltv: LLTV
-        // });
+        marketId = marketParams.id();
         
-        // marketId = marketParams.id();
-        
-        // // Create market on Morpho
-        // vm.prank(owner);
-        // morpho.createMarket(marketParams);
+        // Create market on Morpho
+        vm.prank(morphoOwner);
+        try morpho.createMarket(marketParams) {
+            console.log("Market created successfully with ID:", bytes32ToString(marketId));
+        } catch Error(string memory reason) {
+            console.log("Failed to create market:", reason);
+            // Check if market already exists by trying to get some data from it
+            try morpho.supplyShares(marketId, address(0)) {
+                console.log("Market already exists, continuing...");
+            } catch {
+                // If market doesn't exist and we couldn't create it, make sure IRM is enabled
+                vm.prank(morphoOwner);
+                morpho.enableIrm(address(irm));
+                
+                // Try again after enabling IRM
+                vm.prank(morphoOwner);
+                morpho.createMarket(marketParams);
+            }
+        }
         
         // // Mint tokens to user
-        // loanToken.setBalance(user, INITIAL_SUPPLY);
+        // vm.startPrank(address(0));
+        // IERC20Mock(address(loanToken)).setBalance(user, INITIAL_SUPPLY);
+        // vm.stopPrank();
         
         // // Approve MetaMorpho to spend user's tokens
         // vm.prank(user);
@@ -426,8 +440,9 @@ contract MetaMorphoV1_1Test is Test {
         assertTrue(address(irm).code.length > 0, "IRM contract should exist");
         
         // Try to get Morpho owner
-        try IMorpho(address(morpho)).owner() returns (address morphoOwner) {
-            console.log("Morpho owner:", morphoOwner);
+        try IMorpho(address(morpho)).owner() returns (address currentMorphoOwner) {
+            console.log("Morpho owner:", currentMorphoOwner);
+            assertEq(currentMorphoOwner, morphoOwner, "Morpho owner should match");
         } catch {
             console.log("Failed to get Morpho owner");
         }
@@ -438,5 +453,50 @@ contract MetaMorphoV1_1Test is Test {
         } catch {
             console.log("Failed to check if IRM is enabled");
         }
+    }
+
+    // Test the MetaMorpho vault setup
+    function testMetaMorphoSetup() public {
+        // Verify MetaMorpho contract exists
+        assertTrue(address(metaMorpho).code.length > 0, "MetaMorpho contract should exist");
+        
+        // Check if curator is set correctly
+        try metaMorpho.curator() returns (address currentCurator) {
+            console.log("MetaMorpho curator:", currentCurator);
+            assertEq(currentCurator, curator, "Curator should be set correctly");
+        } catch {
+            console.log("Failed to get MetaMorpho curator");
+        }
+        
+        // Check if allocator is set correctly
+        try metaMorpho.isAllocator(allocator) returns (bool isAllocator) {
+            console.log("Is allocator:", isAllocator);
+            assertTrue(isAllocator, "Allocator should be set correctly");
+        } catch {
+            console.log("Failed to check if allocator is set");
+        }
+        
+        // Try to get owner
+        try IMetaMorphoV1_1(address(metaMorpho)).owner() returns (address currentMetaMorphoOwner) {
+            console.log("MetaMorpho owner:", currentMetaMorphoOwner);
+            assertEq(currentMetaMorphoOwner, metaMorphoOwner, "Owner should match");
+        } catch {
+            console.log("Failed to get MetaMorpho owner");
+        }
+    }
+
+    // Helper function to convert bytes32 to string for logging
+    function bytes32ToString(bytes32 _bytes32) internal pure returns (string memory) {
+        bytes memory bytesArray = new bytes(64);
+        for (uint256 i = 0; i < 32; i++) {
+            uint8 value = uint8(uint256(_bytes32) / (2**(8 * (31 - i))));
+            uint8 hi = value / 16;
+            uint8 lo = value - 16 * hi;
+            
+            // Convert to hex characters (0-9, a-f)
+            bytesArray[i * 2] = hi < 10 ? bytes1(uint8(48 + hi)) : bytes1(uint8(87 + hi)); // 48 is '0', 87 is 'a'-10
+            bytesArray[i * 2 + 1] = lo < 10 ? bytes1(uint8(48 + lo)) : bytes1(uint8(87 + lo));
+        }
+        return string(bytesArray);
     }
 }
