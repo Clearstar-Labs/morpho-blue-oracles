@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IOracle} from "lib/morpho-blue/src/interfaces/IOracle.sol";
 
 // Define minimal interfaces for MetaMorpho
 interface IMetaMorphoV1_1 {
@@ -83,16 +84,16 @@ interface IMorpho {
     function supplyShares(bytes32 marketId, address supplier) external view returns (uint256);
 }
 
-// Helper library for market params
 library MarketParamsLib {
-    function id(IMorpho.MarketParams memory marketParams) internal pure returns (bytes32) {
-        return keccak256(abi.encode(
-            marketParams.loanToken,
-            marketParams.collateralToken,
-            marketParams.oracle,
-            marketParams.irm,
-            marketParams.lltv
-        ));
+    /// @notice The length of the data used to compute the id of a market.
+    /// @dev The length is 5 * 32 because `MarketParams` has 5 variables of 32 bytes each.
+    uint256 internal constant MARKET_PARAMS_BYTES_LENGTH = 5 * 32;
+
+    /// @notice Returns the id of the market `marketParams`.
+    function id(IMorpho.MarketParams memory marketParams) internal pure returns (bytes32 marketParamsId) {
+        assembly ("memory-safe") {
+            marketParamsId := keccak256(marketParams, MARKET_PARAMS_BYTES_LENGTH)
+        }
     }
 }
 
@@ -100,6 +101,13 @@ library MarketParamsLib {
 import {PendleSparkLinearDiscountOracleFactory} from "../src/pendle/PendleSparkLinearDiscountOracleFactory.sol";
 import {PendleSparkLinearDiscountOracle} from "../src/pendle/PendleSparkLinearDiscountOracle.sol";
 import {IPendleSparkLinearDiscountOracleFactory} from "../src/pendle/interfaces/IPendleSparkLinearDiscountOracleFactory.sol";
+
+// Add imports for Morpho Chainlink oracle contracts
+import {MorphoChainlinkOracleV2Factory} from "../src/morpho-chainlink/MorphoChainlinkOracleV2Factory.sol";
+import {MorphoChainlinkOracleV2} from "../src/morpho-chainlink/MorphoChainlinkOracleV2.sol";
+import {IMorphoChainlinkOracleV2Factory} from "../src/morpho-chainlink/interfaces/IMorphoChainlinkOracleV2Factory.sol";
+import {AggregatorV3Interface} from "../src/morpho-chainlink/libraries/ChainlinkDataFeedLib.sol";
+import {IERC4626} from "../src/morpho-chainlink/libraries/VaultLib.sol";
 
 contract MetaMorphoV1_1Test is Test {
     using MarketParamsLib for IMorpho.MarketParams;
@@ -113,10 +121,14 @@ contract MetaMorphoV1_1Test is Test {
     IERC20Mock public collateralToken;
     IOracleMock public oracle;
     IIrmMock public irm;
-    
+
     // Pendle oracle contracts
     PendleSparkLinearDiscountOracleFactory public pendleOracleFactory;
     PendleSparkLinearDiscountOracle public pendleOracle;
+
+    // Morpho Chainlink oracle contracts
+    MorphoChainlinkOracleV2Factory public chainlinkOracleFactory;
+    MorphoChainlinkOracleV2 public chainlinkOracle;
     
     // Test addresses
     address public metaMorphoOwner;
@@ -147,19 +159,20 @@ contract MetaMorphoV1_1Test is Test {
         allocator = makeAddr("allocator");
         user = makeAddr("user");
         
-        // Use the real loan token instead of deploying a mock
-        loanToken = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+        // Use USDC as loan token
+        loanToken = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
         console.log("Loan Token Address:", address(loanToken));
         
-        // Use USDC as collateral token
-        collateralToken = IERC20Mock(0x21aacE56a8F21210b7E76d8eF1a77253Db85BF0a);
+        // Use PT fxSAVE as collateral token
+        // PT fxSAVE address
+        collateralToken = IERC20Mock(0x21aacE56a8F21210b7E76d8eF1a77253Db85BF0a); // PT fxSAVE
         console.log("Collateral Token Address:", address(collateralToken));
         
         // Deploy PendleSparkLinearDiscountOracleFactory
         pendleOracleFactory = new PendleSparkLinearDiscountOracleFactory();
         console.log("Pendle Oracle Factory Address:", address(pendleOracleFactory));
         
-        // Create PendleSparkLinearDiscountOracle
+        // Create PendleSparkLinearDiscountOracle for PT fxSAVE
         bytes32 salt = bytes32(uint256(1)); // Use a simple salt
         pendleOracle = pendleOracleFactory.createPendleSparkLinearDiscountOracle(
             address(collateralToken),
@@ -167,6 +180,17 @@ contract MetaMorphoV1_1Test is Test {
             salt
         );
         console.log("Pendle Oracle Address:", address(pendleOracle));
+        
+        // Use existing MorphoChainlinkOracleV2Factory
+        chainlinkOracleFactory = MorphoChainlinkOracleV2Factory(0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766);
+        console.log("Chainlink Oracle Factory Address:", address(chainlinkOracleFactory));
+        
+        // Create MorphoChainlinkOracleV2 using the Pendle oracle as a feed
+        // For PT fxSAVE/USDC pair
+        bytes32 chainlinkSalt = bytes32(uint256(2)); // Different salt
+        
+        // Use USDC/USD feed for the quote token (loan token)
+        AggregatorV3Interface usdcUsdFeed = AggregatorV3Interface(0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6);
         
         // Use existing Morpho contract
         morpho = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb);
@@ -184,44 +208,105 @@ contract MetaMorphoV1_1Test is Test {
         vm.prank(metaMorphoOwner);
         metaMorpho.setIsAllocator(allocator, true);
         
-        // // Enable LLTV on Morpho if not already enabled
+        // Enable LLTV on Morpho if not already enabled
         console.log("Morpho Owner:", morphoOwner);
         
         vm.prank(morphoOwner);
         if (!morpho.isLltvEnabled(LLTV)) {
             morpho.enableLltv(LLTV);
         }
+
+
+        // Create the oracle with PT fxSAVE as base (collateral) and USDC as quote (loan)
+        chainlinkOracle = chainlinkOracleFactory.createMorphoChainlinkOracleV2(
+            IERC4626(address(0)), // No vault for PT fxSAVE
+            1, // No conversion needed
+            AggregatorV3Interface(address(pendleOracle)), // Use Pendle oracle as the feed for PT fxSAVE
+            AggregatorV3Interface(address(0)), // No second feed
+            18, // PT fxSAVE has 18 decimals
+            IERC4626(address(0)), // No vault for USDC
+            1, // No conversion needed
+            usdcUsdFeed, // USDC/USD feed
+            AggregatorV3Interface(address(0)), // No second feed
+            6, // USDC has 6 decimals
+            chainlinkSalt
+        );
+        console.log("Chainlink Oracle Address:", address(chainlinkOracle));
+
+        uint256 price = IOracle(address(chainlinkOracle)).price();
+        console.log("price:", price);
+        // Check if the oracle works by getting its price
+        // try IOracle(address(chainlinkOracle)).price() returns (uint256 price) {
+        //     console.log("Oracle price:", price);
+        //     console.log("Oracle price (normalized):", price / 1e36);
+        // } catch Error(string memory reason) {
+        //     console.log("Oracle error:", reason);
+        // } catch {
+        //     console.log("Oracle call failed with unknown error");
+        // }
+
+        // // Check the Pendle oracle feed
+        // try AggregatorV3Interface(address(pendleOracle)).latestRoundData() returns (
+        //     uint80 roundId,
+        //     int256 answer,
+        //     uint256 startedAt,
+        //     uint256 updatedAt,
+        //     uint80 answeredInRound
+        // ) {
+        //     console.log("Pendle oracle answer:", uint256(answer));
+        // } catch Error(string memory reason) {
+        //     console.log("Pendle oracle error:", reason);
+        // } catch {
+        //     console.log("Pendle oracle call failed with unknown error");
+        // }
+
+        // // Check the USDC/USD feed
+        // try usdcUsdFeed.latestRoundData() returns (
+        //     uint80 roundId,
+        //     int256 answer,
+        //     uint256 startedAt,
+        //     uint256 updatedAt,
+        //     uint80 answeredInRound
+        // ) {
+        //     console.log("USDC/USD feed answer:", uint256(answer));
+        // } catch Error(string memory reason) {
+        //     console.log("USDC/USD feed error:", reason);
+        // } catch {
+        //     console.log("USDC/USD feed call failed with unknown error");
+        // }
         
-        // Set up market parameters
-        marketParams = IMorpho.MarketParams({
-            loanToken: address(loanToken),
-            collateralToken: address(collateralToken),
-            oracle: address(pendleOracle),
-            irm: address(irm),
-            lltv: LLTV
-        });
+        // // Set up market parameters using the Chainlink oracle
+        // marketParams = IMorpho.MarketParams({
+        //     loanToken: address(loanToken),
+        //     collateralToken: address(collateralToken),
+        //     oracle: address(chainlinkOracle), // Use the Chainlink oracle
+        //     irm: address(irm),
+        //     lltv: LLTV
+        // });
         
-        marketId = marketParams.id();
+        // marketId = marketParams.id();
+
+        // console.logBytes32(marketId);
         
         // Create market on Morpho
-        vm.prank(morphoOwner);
-        try morpho.createMarket(marketParams) {
-            console.log("Market created successfully with ID:", bytes32ToString(marketId));
-        } catch Error(string memory reason) {
-            console.log("Failed to create market:", reason);
-            // Check if market already exists by trying to get some data from it
-            try morpho.supplyShares(marketId, address(0)) {
-                console.log("Market already exists, continuing...");
-            } catch {
-                // If market doesn't exist and we couldn't create it, make sure IRM is enabled
-                vm.prank(morphoOwner);
-                morpho.enableIrm(address(irm));
+        // vm.prank(morphoOwner);
+        // try morpho.createMarket(marketParams) {
+        //     console.log("Market created successfully with ID:", bytes32ToString(marketId));
+        // } catch Error(string memory reason) {
+        //     console.log("Failed to create market:", reason);
+        //     // Check if market already exists by trying to get some data from it
+        //     // try morpho.supplyShares(marketId, address(0)) {
+        //     //     console.log("Market already exists, continuing...");
+        //     // } catch {
+        //     //     // If market doesn't exist and we couldn't create it, make sure IRM is enabled
+        //     //     vm.prank(morphoOwner);
+        //     //     morpho.enableIrm(address(irm));
                 
-                // Try again after enabling IRM
-                vm.prank(morphoOwner);
-                morpho.createMarket(marketParams);
-            }
-        }
+        //     //     // Try again after enabling IRM
+        //     //     vm.prank(morphoOwner);
+        //     //     morpho.createMarket(marketParams);
+        //     // }
+        // }
         
         // // Mint tokens to user
         // vm.startPrank(address(0));
@@ -405,7 +490,7 @@ contract MetaMorphoV1_1Test is Test {
         );
         
         // Check oracle parameters
-        assertEq(pendleOracle.PT(), address(loanToken), "Oracle PT should be loan token");
+        assertEq(pendleOracle.PT(), address(collateralToken), "Oracle PT should be loan token");
         assertEq(pendleOracle.baseDiscountPerYear(), BASE_DISCOUNT_PER_YEAR, "Oracle discount rate should match");
         
         // Try to get price data
