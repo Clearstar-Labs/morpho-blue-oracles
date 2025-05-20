@@ -24,14 +24,15 @@ import {PendleChainlinkOracle, PendleOracleType} from "pendle-core-v2-public/con
             --etherscan-api-key $ETHERSCAN_API_KEY
  */
 contract DeployPendleChainlinkOracle is Script {
-    // Default values - can be overridden via environment variables
-    address public constant DEFAULT_MARKET = 0x21aacE56a8F21210b7E76d8eF1a77253Db85BF0a; // Example market address
+    // Default values for other parameters - can be overridden via environment variables
     uint32 public constant DEFAULT_TWAP_DURATION = 1800; // 30 minutes in seconds
     PendleOracleType public constant DEFAULT_ORACLE_TYPE = PendleOracleType.PT_TO_ASSET; // PT to Asset price
 
     function run() public returns (PendleChainlinkOracle oracle) {
-        // Get deployment parameters from environment or use defaults
-        address market = vm.envOr("PENDLE_MARKET", DEFAULT_MARKET);
+        // Get market address from environment - no default provided, will fail if not set
+        address market = vm.envAddress("PENDLE_MARKET");
+        
+        // Get other deployment parameters from environment or use defaults
         uint32 twapDuration = uint32(vm.envOr("TWAP_DURATION", uint256(DEFAULT_TWAP_DURATION)));
         PendleOracleType oracleType = PendleOracleType(vm.envOr("ORACLE_TYPE", uint256(DEFAULT_ORACLE_TYPE)));
         
