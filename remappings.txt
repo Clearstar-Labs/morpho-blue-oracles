@@ -1,0 +1,4 @@
+pendle-core-v2-public/=lib/pendle-core-v2-public/
+@chainlink/contracts/src/v0.8/interfaces/=lib/chainlink-brownie-contracts/contracts/src/v0.8/shared/interfaces/
+@chainlink/contracts/=lib/chainlink-brownie-contracts/contracts/
+@openzeppelin/=lib/openzeppelin-contracts/
