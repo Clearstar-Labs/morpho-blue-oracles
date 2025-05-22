@@ -12,12 +12,7 @@ import {NetAssetValueChainlinkAdapter, INetAssetValue} from "../src/fxusd-nav-ad
  * @dev Run with:
         source .env
 
-        forge script scripts/DeployNetAssetValueChainlinkAdapter.s.sol:DeployNetAssetValueChainlinkAdapter
-            --rpc-url $ETH_RPC_URL   
-            --private-key $PRIVATE_KEY   
-            --broadcast   
-            --verify   
-            --etherscan-api-key $ETHERSCAN_API_KEY
+        forge script scripts/DeployNetAssetValueChainlinkAdapter.s.sol:DeployNetAssetValueChainlinkAdapter --rpc-url $ETH_RPC_URL --private-key $PRIVATE_KEY --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY
  */
 contract DeployNetAssetValueChainlinkAdapter is Script {
     // Default values - can be overridden via environment variables
