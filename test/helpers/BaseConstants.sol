@@ -27,5 +27,8 @@ AggregatorV3Interface constant baseUsrUsdFeed = AggregatorV3Interface(0x4a595E0a
 AggregatorV3Interface constant baseWstUsrUsrFeed = AggregatorV3Interface(0x17D099fc623bd06CFE4861d874704Af184773c75);
 
 // Token decimals on Base
-uint256 constant WSTUSR_DECIMALS = 18; // TODO: Replace with actual WSTUSR decimals
+uint256 constant WSTUSR_DECIMALS = 18; // wstUSR has 18 decimals
 uint256 constant USDC_DECIMALS = 6;    // USDC has 6 decimals on Base
+
+// Correct wstUSR token address on Base
+address constant WSTUSR_TOKEN = 0xb67675158b412d53fe6b68946483ba920b135ba1;

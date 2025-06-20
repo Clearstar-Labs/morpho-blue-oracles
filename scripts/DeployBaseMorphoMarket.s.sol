@@ -27,7 +27,7 @@ contract DeployBaseMorphoMarket is Script {
     
     // Token addresses on Base
     address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    address constant WSTUSR = 0xC33dCb063E3D9Da00C3fa0a7Cbf9f6670cd7C132;
+    address constant WSTUSR = 0xB67675158B412D53fe6B68946483ba920b135bA1;
     
     // Oracle address (deployed in previous script)
     address constant ORACLE = 0x31fB76310E7AA59f4994af8cb6a420c39669604A;
