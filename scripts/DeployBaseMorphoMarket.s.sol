@@ -13,7 +13,7 @@ interface IMorpho {
         uint256 lltv;
     }
 
-    function createMarket(MarketParams memory marketParams) external returns (bytes32 id);
+    function createMarket(MarketParams memory marketParams) external;
     function idToMarketParams(bytes32 id) external view returns (MarketParams memory);
 }
 
@@ -27,13 +27,18 @@ contract DeployBaseMorphoMarket is Script {
     
     // Token addresses on Base
     address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    address constant WSTUSR = 0xc33dcb063e3d9da00c3fa0a7cbf9f6670cd7c132;
+    address constant WSTUSR = 0xC33dCb063E3D9Da00C3fa0a7Cbf9f6670cd7C132;
     
     // Oracle address (deployed in previous script)
     address constant ORACLE = 0x31fB76310E7AA59f4994af8cb6a420c39669604A;
     
     // LLTV: 91.5% = 0.915 = 915000000000000000 (18 decimals)
     uint256 constant LLTV = 915000000000000000;
+
+    // Function to calculate market ID from parameters
+    function getMarketId(IMorpho.MarketParams memory marketParams) internal pure returns (bytes32) {
+        return keccak256(abi.encode(marketParams));
+    }
     
     function run() external {
         // Ensure we're on Base network
@@ -45,7 +50,8 @@ contract DeployBaseMorphoMarket is Script {
         console.log("Collateral token (wstUSR):", WSTUSR);
         console.log("Oracle:", ORACLE);
         console.log("IRM (Adaptive Curve):", ADAPTIVE_CURVE_IRM);
-        console.log("LLTV (91.5%):", LLTV);
+        console.log("LLTV (91.5%):");
+        console.log("LLTV value:", LLTV);
         
         // Start broadcasting transactions
         vm.startBroadcast();
@@ -59,15 +65,39 @@ contract DeployBaseMorphoMarket is Script {
             lltv: LLTV
         });
         
+        // Calculate market ID before creation
+        bytes32 marketId = getMarketId(marketParams);
+        console.log("Calculated Market ID:", vm.toString(marketId));
+
         // Deploy the market
         IMorpho morpho = IMorpho(MORPHO);
-        bytes32 marketId = morpho.createMarket(marketParams);
-        
-        console.log("\n=== Market Deployed Successfully ===");
-        console.log("Market ID:", vm.toString(marketId));
-        
+
+        console.log("\n=== Creating Market ===");
+        try morpho.createMarket(marketParams) {
+            console.log("Market created successfully!");
+        } catch Error(string memory reason) {
+            console.log("Market creation failed:", reason);
+            revert(reason);
+        } catch (bytes memory lowLevelData) {
+            console.log("Market creation failed with low-level error");
+            console.logBytes(lowLevelData);
+            revert("Market creation failed");
+        }
+
         // Verify market was created correctly
-        IMorpho.MarketParams memory createdMarket = morpho.idToMarketParams(marketId);
+        console.log("\n=== Verifying Market Parameters ===");
+        IMorpho.MarketParams memory createdMarket;
+        try morpho.idToMarketParams(marketId) returns (IMorpho.MarketParams memory params) {
+            createdMarket = params;
+            console.log("Market parameters retrieved successfully");
+        } catch Error(string memory reason) {
+            console.log("Failed to retrieve market parameters:", reason);
+            revert(reason);
+        } catch (bytes memory lowLevelData) {
+            console.log("Failed to retrieve market parameters with low-level error");
+            console.logBytes(lowLevelData);
+            revert("Failed to retrieve market parameters");
+        }
         
         console.log("\n=== Market Verification ===");
         console.log("Loan Token:", createdMarket.loanToken);
@@ -83,7 +113,7 @@ contract DeployBaseMorphoMarket is Script {
         require(createdMarket.irm == ADAPTIVE_CURVE_IRM, "IRM mismatch");
         require(createdMarket.lltv == LLTV, "LLTV mismatch");
         
-        console.log("\n✅ All parameters verified successfully!");
+        console.log("\n[SUCCESS] All parameters verified successfully!");
         
         vm.stopBroadcast();
         
@@ -92,10 +122,10 @@ contract DeployBaseMorphoMarket is Script {
         console.log("Market ID:", vm.toString(marketId));
         console.log("Loan-to-Value Ratio: 91.5%");
         console.log("Users can now:");
-        console.log("1. Supply USDC to earn interest");
-        console.log("2. Supply wstUSR as collateral");
-        console.log("3. Borrow USDC against wstUSR collateral");
-        console.log("4. Maximum borrowing: 91.5% of collateral value");
+        console.log("1. Supply wstUSR as collateral");
+        console.log("2. Borrow USDC against wstUSR collateral (up to 91.5% LTV)");
+        console.log("3. USDC suppliers can lend USDC to earn interest");
+        console.log("4. Borrowers pay interest on borrowed USDC");
         
         console.log("\n=== Integration Details ===");
         console.log("Use this Market ID in your frontend/integration:");

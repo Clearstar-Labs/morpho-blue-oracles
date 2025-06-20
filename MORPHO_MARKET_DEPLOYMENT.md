@@ -20,6 +20,7 @@ The oracle calculates wstUSR price in USDC terms using:
 ## Deployment
 
 ```bash
+source .env
 forge script scripts/DeployBaseMorphoMarket.s.sol:DeployBaseMorphoMarket \
     --rpc-url https://mainnet.base.org \
     --private-key $PRIVATE_KEY \
@@ -38,16 +39,16 @@ The script will:
 
 Once deployed, users can:
 
-### Suppliers (USDC)
-- Supply USDC to earn interest from borrowers
+### USDC Lenders
+- Supply USDC to the market to earn interest from borrowers
 - Withdraw USDC at any time (subject to utilization)
 - Earn yield based on market utilization and IRM
 
-### Borrowers (wstUSR → USDC)
+### wstUSR Holders (Borrowers)
 - Supply wstUSR as collateral
 - Borrow up to 91.5% of collateral value in USDC
-- Pay interest based on the Adaptive Curve IRM
-- Risk liquidation if collateral value drops
+- Pay interest on borrowed USDC based on the Adaptive Curve IRM
+- Risk liquidation if collateral value drops below 91.5%
 
 ### Liquidators
 - Monitor positions that fall below 91.5% health factor
