@@ -64,8 +64,8 @@ contract DeployBaseWstUsrUsdcOracle is Script {
         }
         
         vm.stopBroadcast();
-        
-        // Verification instructions
+
+        // Next steps
         console.log("\n=== Next Steps ===");
         console.log("1. Verify the oracle feeds are working correctly");
         console.log("2. Update your Morpho market configuration to use this oracle:");
