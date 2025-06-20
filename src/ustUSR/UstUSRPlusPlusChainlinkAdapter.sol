@@ -2,7 +2,22 @@
 pragma solidity 0.8.21;
 
 import {MinimalAggregatorV3Interface} from "../fxusd-nav-adapter/interfaces/MinimalAggregatorV3Interface.sol";
-import {IUSRPriceAggregatorV3Interface} from "./interfaces/IUSRPriceAggregatorV3Interface.sol";
+
+/// @title IUSRPriceAggregatorV3Interface
+/// @notice Interface for the USR Price Aggregator with only the required functions
+interface IUSRPriceAggregatorV3Interface {
+    /// @notice Returns the number of decimals for the price feed
+    function decimals() external view returns (uint8);
+    
+    /// @notice Returns the latest round data from the price feed
+    function latestRoundData() external view returns (
+        uint80 roundId,
+        int256 answer,
+        uint256 startedAt,
+        uint256 updatedAt,
+        uint80 answeredInRound
+    );
+}
 
 /// @title UstUSRPlusPlusChainlinkAdapter
 /// @author Clearstar Labs
