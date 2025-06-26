@@ -33,6 +33,11 @@ interface IOracle {
     function price() external view returns (uint256);
 }
 
+// IERC20 interface for token info
+interface IERC20 {
+    function symbol() external view returns (string memory);
+}
+
 // IRM interface
 interface IIRM {
     struct MarketParams {
@@ -56,35 +61,27 @@ interface IIRM {
 }
 
 contract ReadMarketUtilization is Script {
-    // Base network chain ID
-    uint256 constant BASE_CHAIN_ID = 8453;
     
-    // Contract addresses on Base
-    address constant MORPHO = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
-    address constant ADAPTIVE_CURVE_IRM = 0x46415998764C29aB2a25CbeA6254146D50D22687;
-    
-    // Token addresses on Base
-    address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    address constant WSTUSR = 0xB67675158B412D53fe6B68946483ba920b135bA1;
-    
-    // Oracle address
-    address constant ORACLE = 0x31fB76310E7AA59f4994af8cb6a420c39669604A;
-    
-    // LLTV: 91.5%
-    uint256 constant LLTV = 915000000000000000;
-    
-    function getMarketParams() internal pure returns (IMorpho.MarketParams memory) {
+    function getMarketParams() internal view returns (IMorpho.MarketParams memory) {
         return IMorpho.MarketParams({
-            loanToken: USDC,
-            collateralToken: WSTUSR,
-            oracle: ORACLE,
-            irm: ADAPTIVE_CURVE_IRM,
-            lltv: LLTV
+            loanToken: vm.envAddress("LOAN_TOKEN"),
+            collateralToken: vm.envAddress("COLLATERAL_TOKEN"),
+            oracle: vm.envAddress("ORACLE_ADDRESS"),
+            irm: vm.envAddress("IRM_ADDRESS"),
+            lltv: vm.envUint("LLTV")
         });
     }
     
     function getMarketId(IMorpho.MarketParams memory marketParams) internal pure returns (bytes32) {
         return keccak256(abi.encode(marketParams));
+    }
+
+    function getTokenSymbol(address token) internal view returns (string memory) {
+        try IERC20(token).symbol() returns (string memory symbol) {
+            return symbol;
+        } catch {
+            return "TOKEN";
+        }
     }
     
     function formatRate(uint256 rate) internal pure returns (string memory) {
@@ -96,31 +93,42 @@ contract ReadMarketUtilization is Script {
     }
     
     function run() external view {
-        // Ensure we're on Base network
-        require(block.chainid == BASE_CHAIN_ID, "Must be on Base network");
-        
+        // Get all required addresses from environment variables
+        address morphoContract = vm.envAddress("MORPHO_CONTRACT");
+
         // Get market parameters and ID
         IMorpho.MarketParams memory marketParams = getMarketParams();
         bytes32 marketId = getMarketId(marketParams);
-        
+
+        // Get token symbols for display
+        string memory loanTokenSymbol = getTokenSymbol(marketParams.loanToken);
+        string memory collateralTokenSymbol = getTokenSymbol(marketParams.collateralToken);
+
+        // Calculate LLTV percentage with decimal precision
+        uint256 lltvPercent = (marketParams.lltv * 1000) / 1e18; // Get to 0.1% precision
+
         console.log("=== Morpho Market Utilization Report ===");
+        console.log("Chain ID:", block.chainid);
         console.log("Market ID:", vm.toString(marketId));
-        console.log("Loan Token (USDC):", USDC);
-        console.log("Collateral Token (wstUSR):", WSTUSR);
-        console.log("Oracle:", ORACLE);
-        console.log("IRM:", ADAPTIVE_CURVE_IRM);
-        console.log("LLTV: 91.5%");
-        
+        console.log("Loan Token:", marketParams.loanToken);
+        console.log("Loan Token Symbol:", loanTokenSymbol);
+        console.log("Collateral Token:", marketParams.collateralToken);
+        console.log("Collateral Token Symbol:", collateralTokenSymbol);
+        console.log("Oracle:", marketParams.oracle);
+        console.log("IRM:", marketParams.irm);
+        // Display LLTV with decimal precision (e.g., 91.5%)
+        console.log("LLTV:", string(abi.encodePacked(vm.toString(lltvPercent / 10), ".", vm.toString(lltvPercent % 10), "%")));
+
         // Get market data
-        IMorpho morpho = IMorpho(MORPHO);
+        IMorpho morpho = IMorpho(morphoContract);
         IMorpho.Market memory market;
 
         try morpho.market(marketId) returns (IMorpho.Market memory marketData) {
             market = marketData;
             console.log("\n=== Market State ===");
-            console2.log("Total Supply Assets (USDC):", uint256(market.totalSupplyAssets));
+            console2.log("Total Supply Assets:", loanTokenSymbol, ":", uint256(market.totalSupplyAssets));
             console2.log("Total Supply Shares:", uint256(market.totalSupplyShares));
-            console2.log("Total Borrow Assets (USDC):", uint256(market.totalBorrowAssets));
+            console2.log("Total Borrow Assets:", loanTokenSymbol, ":", uint256(market.totalBorrowAssets));
             console2.log("Total Borrow Shares:", uint256(market.totalBorrowShares));
             console2.log("Last Update:", uint256(market.lastUpdate));
             console2.log("Fee:", uint256(market.fee));
@@ -143,7 +151,7 @@ contract ReadMarketUtilization is Script {
 
         // Calculate available liquidity
         uint256 availableLiquidity = uint256(market.totalSupplyAssets) - uint256(market.totalBorrowAssets);
-        console2.log("Available Liquidity (USDC):", availableLiquidity);
+        console2.log("Available Liquidity:", loanTokenSymbol, ":", availableLiquidity);
         
         // Get interest rates
         try morpho.borrowRate(marketParams, market) returns (uint256 borrowRatePerSecond) {
@@ -161,13 +169,14 @@ contract ReadMarketUtilization is Script {
         }
         
         // Get oracle price
-        try IOracle(ORACLE).price() returns (uint256 oraclePrice) {
+        try IOracle(marketParams.oracle).price() returns (uint256 oraclePrice) {
             console.log("\n=== Oracle Price ===");
-            console2.log("wstUSR/USDC Price (scaled by 1e36):", oraclePrice);
+            console2.log("Oracle Price (scaled by 1e36):", oraclePrice);
+            console.log("Price represents:", collateralTokenSymbol, "/", loanTokenSymbol);
 
-            // Convert to human readable (assuming 18 decimals for wstUSR, 6 for USDC)
-            uint256 humanPrice = oraclePrice / 1e30; // 1e36 - 6 = 1e30
-            console2.log("wstUSR/USDC Price (human readable):", humanPrice);
+            // Convert to human readable (scaled down from 1e36)
+            uint256 humanPrice = oraclePrice / 1e30; // 1e36 - 6 = 1e30 (assuming 6 decimal loan token)
+            console2.log("Human readable price:", humanPrice);
         } catch {
             console.log("\n=== Oracle Price ===");
             console.log("Could not fetch oracle price");
@@ -187,8 +196,8 @@ contract ReadMarketUtilization is Script {
             console.log("Status: Very high utilization - limited liquidity");
         }
         
-        console2.log("Total Value Locked (USDC):", uint256(market.totalSupplyAssets));
-        console2.log("Total Borrowed (USDC):", uint256(market.totalBorrowAssets));
-        console2.log("Available for Withdrawal (USDC):", availableLiquidity);
+        console2.log("Total Value Locked:", loanTokenSymbol, ":", uint256(market.totalSupplyAssets));
+        console2.log("Total Borrowed:", loanTokenSymbol, ":", uint256(market.totalBorrowAssets));
+        console2.log("Available for Withdrawal:", loanTokenSymbol, ":", availableLiquidity);
     }
 }
