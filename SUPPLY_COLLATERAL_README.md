@@ -1,76 +1,89 @@
-# Supply wstUSR Collateral Script
+# Supply Collateral Script
 
-This script allows you to supply wstUSR as collateral to the Morpho Blue market.
+This script allows you to supply any token as collateral to a Morpho Blue market.
 
 ## Prerequisites
 
-1. **wstUSR tokens** in your wallet on Base network
-2. **ETH for gas** on Base network
-3. **Private key** with access to the wstUSR tokens
+1. **Collateral tokens** in your wallet on the target network
+2. **ETH for gas** on the target network
+3. **Private key** with access to the collateral tokens
+4. **Environment variables** configured for your market
 
 ## Usage
 
-### Basic Usage (1 wstUSR)
+### Basic Usage (Full Balance)
 ```bash
-forge script scripts/SupplyWstUsrCollateral.s.sol:SupplyWstUsrCollateral \
-    --rpc-url https://mainnet.base.org \
+forge script scripts/SupplyMorphoCollateral.s.sol:SupplyCollateral \
+    --rpc-url $YOUR_RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast
 ```
 
 ### Custom Amount
 ```bash
-# Supply 5 wstUSR (5 * 10^18)
+# Supply specific amount (in token units with decimals)
 export SUPPLY_AMOUNT=5000000000000000000
 
-forge script scripts/SupplyWstUsrCollateral.s.sol:SupplyWstUsrCollateral \
-    --rpc-url https://mainnet.base.org \
+forge script scripts/SupplyMorphoCollateral.s.sol:SupplyCollateral \
+    --rpc-url $YOUR_RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast
 ```
 
 ### Dry Run (Simulation)
 ```bash
-forge script scripts/SupplyWstUsrCollateral.s.sol:SupplyWstUsrCollateral \
-    --rpc-url https://mainnet.base.org \
+forge script scripts/SupplyMorphoCollateral.s.sol:SupplyCollateral \
+    --rpc-url $YOUR_RPC_URL \
     --private-key $PRIVATE_KEY
 ```
 
 ## What the Script Does
 
-1. **Checks your wstUSR balance** to ensure you have enough tokens
-2. **Checks current allowance** for the Morpho contract
-3. **Approves the spend** if needed (only the amount being supplied)
-4. **Shows your position before** supplying collateral
-5. **Supplies the collateral** to the Morpho market
-6. **Shows your position after** to confirm the supply
-7. **Displays next steps** for borrowing
+1. **Reads market configuration** from environment variables
+2. **Checks your collateral token balance** to ensure you have enough tokens
+3. **Checks current allowance** for the Morpho contract
+4. **Approves the spend** if needed (only the amount being supplied)
+5. **Shows your position before** supplying collateral
+6. **Supplies the collateral** to the Morpho market
+7. **Shows your position after** to confirm the supply
+8. **Displays next steps** for borrowing
 
 ## Environment Variables
 
-- `PRIVATE_KEY`: Your wallet's private key (required)
-- `SUPPLY_AMOUNT`: Amount to supply in wei (optional, defaults to 1e18 = 1 wstUSR)
+### Required (from .env file)
+- `MORPHO_CONTRACT`: Morpho Blue contract address
+- `LOAN_TOKEN`: Address of the token that can be borrowed
+- `COLLATERAL_TOKEN`: Address of the token being supplied as collateral
+- `ORACLE_ADDRESS`: Oracle contract address for the market
+- `IRM_ADDRESS`: Interest Rate Model contract address
+- `LLTV`: Loan-to-Value ratio in 18 decimals
+
+### Optional
+- `PRIVATE_KEY`: Your wallet's private key (required for execution)
+- `SUPPLY_AMOUNT`: Amount to supply in token units with decimals (optional, defaults to full balance)
 
 ## Market Details
 
-- **Market**: wstUSR (collateral) / USDC (loan)
-- **LLTV**: 91.5% (you can borrow up to 91.5% of collateral value)
-- **Oracle**: Uses your deployed oracle with Pyth + Chainlink feeds
-- **Network**: Base mainnet
+- **Market**: Configured via environment variables (any collateral/loan token pair)
+- **LLTV**: Configured via LLTV environment variable
+- **Oracle**: Uses oracle specified in ORACLE_ADDRESS
+- **Network**: Any network (determined by RPC URL)
 
 ## Example Output
 
 ```
-=== Supplying wstUSR Collateral to Morpho ===
+=== Supplying Collateral to Morpho ===
+Chain ID: 8453
 Morpho contract: 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb
 Market ID: 0x...
-wstUSR token: 0xC33dCb063E3D9Da00C3fa0a7Cbf9f6670cd7C132
-Supply amount: 1000000000000000000
+Collateral token: 0xC33dCb063E3D9Da00C3fa0a7Cbf9f6670cd7C132
+Token symbol: wstUSR
 User address: 0x...
-wstUSR balance: 5000000000000000000
+Supply amount: 1000000000000000000
+Token balance: 5000000000000000000
 Current allowance: 0
 
-Approving wstUSR spend...
+Approving token spend...
 Approval successful
 
 === Position Before Supply ===
@@ -109,10 +122,11 @@ Once you've supplied wstUSR collateral, you can:
 
 ## Troubleshooting
 
-- **"Insufficient wstUSR balance"**: You don't have enough wstUSR tokens
+- **"Insufficient token balance"**: You don't have enough collateral tokens
 - **"Approval failed"**: Check that your wallet has ETH for gas
 - **"Supply failed"**: The market might not exist or have issues
-- **Network errors**: Ensure you're connected to Base mainnet
+- **"Environment variable not found"**: Ensure all required variables are set in .env
+- **Network errors**: Ensure you're connected to the correct network
 
 ## Next Steps
 
