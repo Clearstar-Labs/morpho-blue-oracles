@@ -35,15 +35,13 @@ interface IMorpho {
 contract SupplyCollateral is Script {
     
     function getSupplyAmount(address user, address collateralToken) internal view returns (uint256) {
-        // try vm.envUint("SUPPLY_AMOUNT") returns (uint256 amount) {
-        //     return amount;
-        // } catch {
-        //     // Use full balance if no amount specified
-        //     IERC20 token = IERC20(collateralToken);
-        //     return token.balanceOf(user);
-        // }
-        IERC20 token = IERC20(collateralToken);
+        try vm.envUint("SUPPLY_AMOUNT") returns (uint256 amount) {
+            return amount;
+        } catch {
+            // Use full balance if no amount specified
+            IERC20 token = IERC20(collateralToken);
             return token.balanceOf(user);
+        }
     }
 
     function getMarketParams() internal view returns (IMorpho.MarketParams memory) {
