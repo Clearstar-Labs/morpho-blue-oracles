@@ -1,55 +1,66 @@
-# Supply USDC Script
+# Supply Loan Token Script
 
-This script allows you to supply USDC to the Morpho Blue market, making it available for borrowers with wstUSR collateral.
+This script allows you to supply any loan token to a Morpho Blue market, making it available for borrowers with collateral.
 
 ## Prerequisites
 
-1. **USDC tokens** in your wallet on Base network
-2. **ETH for gas** on Base network
-3. **Private key** with access to the USDC tokens
+1. **Loan tokens** in your wallet on the target network
+2. **ETH for gas** on the target network
+3. **Private key** with access to the loan tokens
+4. **Environment variables** configured for your market
 
 ## Usage
 
-### Basic Usage (1000 USDC)
+### Basic Usage (Full Balance)
 ```bash
-forge script scripts/SupplyUsdc.s.sol:SupplyUsdc \
-    --rpc-url https://mainnet.base.org \
+forge script scripts/SupplyMorphoLoanToken.s.sol:SupplyMorphoLoanToken \
+    --rpc-url $ETH_RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast
 ```
 
 ### Custom Amount
 ```bash
-# Supply 5000 USDC (5000 * 10^6 since USDC has 6 decimals)
+# Supply specific amount (in token units with decimals)
 export SUPPLY_AMOUNT=5000000000
 
-forge script scripts/SupplyUsdc.s.sol:SupplyUsdc \
-    --rpc-url https://mainnet.base.org \
+forge script scripts/SupplyMorphoLoanToken.s.sol:SupplyMorphoLoanToken \
+    --rpc-url $ETH_RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast
 ```
 
 ### Dry Run (Simulation)
 ```bash
-forge script scripts/SupplyUsdc.s.sol:SupplyUsdc \
-    --rpc-url https://mainnet.base.org \
+forge script scripts/SupplyMorphoLoanToken.s.sol:SupplyMorphoLoanToken \
+    --rpc-url $ETH_RPC_URL \
     --private-key $PRIVATE_KEY
 ```
 
 ## What the Script Does
 
-1. **Checks your USDC balance** to ensure you have enough tokens
-2. **Checks current allowance** for the Morpho contract
-3. **Approves the spend** if needed (only the amount being supplied)
-4. **Shows your position before** supplying USDC
-5. **Supplies the USDC** to the Morpho market
-6. **Shows your position after** to confirm the supply
-7. **Displays next steps** for earning interest
+1. **Reads market configuration** from environment variables
+2. **Checks your loan token balance** to ensure you have enough tokens
+3. **Checks current allowance** for the Morpho contract
+4. **Approves the spend** if needed (only the amount being supplied)
+5. **Shows your position before** supplying loan tokens
+6. **Supplies the loan tokens** to the Morpho market
+7. **Shows your position after** to confirm the supply
+8. **Displays next steps** for earning interest
 
 ## Environment Variables
 
-- `PRIVATE_KEY`: Your wallet's private key (required)
-- `SUPPLY_AMOUNT`: Amount to supply in USDC units with 6 decimals (optional, defaults to 1000000000 = 1000 USDC)
+### Required (from .env file)
+- `MORPHO_CONTRACT`: Morpho Blue contract address
+- `LOAN_TOKEN`: Address of the token being supplied (that borrowers will borrow)
+- `COLLATERAL_TOKEN`: Address of the token used as collateral
+- `ORACLE_ADDRESS`: Oracle contract address for the market
+- `IRM_ADDRESS`: Interest Rate Model contract address
+- `LLTV`: Loan-to-Value ratio in 18 decimals
+
+### Optional
+- `PRIVATE_KEY`: Your wallet's private key (required for execution)
+- `SUPPLY_AMOUNT`: Amount to supply in token units with decimals (optional, defaults to full balance)
 
 ## Market Details
 
