@@ -1,80 +1,101 @@
-# Borrow USDC Script
+# Borrow Loan Token Script
 
-This script allows you to borrow USDC against your wstUSR collateral in the Morpho Blue market.
+This script allows you to borrow any loan token against your collateral in a Morpho Blue market.
 
 ## Prerequisites
 
-1. **wstUSR collateral** already supplied to the market (use `SupplyWstUsrCollateral.s.sol` first)
-2. **ETH for gas** on Base network
+1. **Collateral** already supplied to the market (use `SupplyMorphoCollateral.s.sol` first)
+2. **ETH for gas** on the target network
 3. **Private key** with access to the collateral position
+4. **Environment variables** configured for your market
 
 ## Usage
 
-### Basic Usage (500 USDC)
+### Basic Usage
 ```bash
-forge script scripts/BorrowUsdc.s.sol:BorrowUsdc \
-    --rpc-url https://mainnet.base.org \
+# Set borrow amount first
+export BORROW_AMOUNT=1000000000
+
+forge script scripts/BorrowMorphoLoanToken.s.sol:BorrowMorphoLoanToken \
+    --rpc-url $ETH_RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast
 ```
 
 ### Custom Amount
 ```bash
-# Borrow 1000 USDC (1000 * 10^6 since USDC has 6 decimals)
+# Borrow specific amount (in token units with decimals)
 export BORROW_AMOUNT=1000000000
 
-forge script scripts/BorrowUsdc.s.sol:BorrowUsdc \
-    --rpc-url https://mainnet.base.org \
+forge script scripts/BorrowMorphoLoanToken.s.sol:BorrowMorphoLoanToken \
+    --rpc-url $ETH_RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast
 ```
 
 ### Dry Run (Simulation)
 ```bash
-forge script scripts/BorrowUsdc.s.sol:BorrowUsdc \
-    --rpc-url https://mainnet.base.org \
+export BORROW_AMOUNT=1000000000
+
+forge script scripts/BorrowMorphoLoanToken.s.sol:BorrowMorphoLoanToken \
+    --rpc-url $ETH_RPC_URL \
     --private-key $PRIVATE_KEY
 ```
 
 ## What the Script Does
 
-1. **Checks your collateral position** to ensure you have wstUSR supplied
-2. **Fetches current oracle price** for wstUSR/USDC
-3. **Calculates maximum borrowable** amount (91.5% of collateral value)
-4. **Validates borrow amount** against maximum borrowable
-5. **Shows health factor** after borrowing
-6. **Executes the borrow** transaction
-7. **Displays position summary** and risk management info
+1. **Reads market configuration** from environment variables
+2. **Checks your collateral position** to ensure you have collateral supplied
+3. **Fetches current oracle price** for collateral/loan token pair
+4. **Calculates maximum borrowable** amount based on LLTV
+5. **Validates borrow amount** against maximum borrowable
+6. **Shows health factor** after borrowing
+7. **Executes the borrow** transaction
+8. **Displays position summary** and risk management info
 
 ## Environment Variables
 
-- `PRIVATE_KEY`: Your wallet's private key (required)
-- `BORROW_AMOUNT`: Amount to borrow in USDC units with 6 decimals (optional, defaults to 500000000 = 500 USDC)
+### Required (from .env file)
+- `MORPHO_CONTRACT`: Morpho Blue contract address
+- `LOAN_TOKEN`: Address of the token being borrowed
+- `COLLATERAL_TOKEN`: Address of the token used as collateral
+- `ORACLE_ADDRESS`: Oracle contract address for the market
+- `IRM_ADDRESS`: Interest Rate Model contract address
+- `LLTV`: Loan-to-Value ratio in 18 decimals
+
+### Required for execution
+- `PRIVATE_KEY`: Your wallet's private key
+- `BORROW_AMOUNT`: Amount to borrow in token units with decimals (required)
 
 ## Market Details
 
-- **Collateral**: wstUSR (must be supplied first)
-- **Loan**: USDC (what you receive)
-- **Maximum LTV**: 91.5% (you can borrow up to 91.5% of collateral value)
-- **Interest**: Accrues over time based on Adaptive Curve IRM
+- **Collateral**: Configured via COLLATERAL_TOKEN (must be supplied first)
+- **Loan**: Configured via LOAN_TOKEN (what you receive)
+- **Maximum LTV**: Configured via LLTV environment variable
+- **Interest**: Accrues over time based on configured IRM
 - **Liquidation**: If health factor drops below 100%
+- **Network**: Any network (determined by RPC URL)
 
 ## Example Output
 
 ```
-=== Borrowing USDC from Morpho Market ===
+=== Borrowing Loan Token from Morpho Market ===
+Chain ID: 8453
 Morpho contract: 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb
 Market ID: 0x...
-USDC token: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+Loan token: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+Loan token symbol: USDC
+Collateral token: 0xB67675158B412D53fe6B68946483ba920b135bA1
+Collateral token symbol: wstUSR
 User address: 0x...
 Borrow amount: 500000000
 
 === Current Position ===
 Supply shares: 0
 Borrow shares: 0
-Collateral (wstUSR): 1000000000000000000
+Collateral: 1000000000000000000
 
-Current wstUSR/USDC price (scaled by 1e36): 1088546689450181297918350
+Current oracle price (scaled by 1e36): 1088546689450181297918350
 Maximum borrowable USDC: 995820000
 Requested borrow amount: 500000000
 Health factor after borrow (1e18 = 100%): 1991640000000000000
@@ -157,15 +178,18 @@ Liquidation means:
 
 ## Troubleshooting
 
-- **"No collateral found"**: Supply wstUSR collateral first
+- **"No collateral found"**: Supply collateral tokens first using SupplyMorphoCollateral.s.sol
 - **"Borrow amount exceeds maximum"**: Reduce borrow amount or add more collateral
 - **"Could not fetch oracle price"**: Oracle might be temporarily unavailable
-- **"Borrow failed"**: Market might not have enough USDC liquidity
+- **"Borrow failed"**: Market might not have enough loan token liquidity
+- **"Environment variable not found"**: Ensure all required variables are set in .env
+- **"BORROW_AMOUNT environment variable not set"**: Set the BORROW_AMOUNT before running
 
 ## Next Steps
 
-After borrowing USDC:
-1. Use your borrowed USDC for intended purpose
+After borrowing loan tokens:
+1. Use your borrowed tokens for intended purpose
 2. Monitor your position health regularly
 3. Plan for interest payments and eventual repayment
-4. Consider using `RepayUsdc.s.sol` when ready to repay
+4. Consider using repay scripts when ready to repay
+5. Market ID for reference is displayed in the output
