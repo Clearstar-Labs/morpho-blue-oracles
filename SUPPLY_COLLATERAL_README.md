@@ -14,7 +14,7 @@ This script allows you to supply any token as collateral to a Morpho Blue market
 ### Basic Usage (Full Balance)
 ```bash
 forge script scripts/SupplyMorphoCollateral.s.sol:SupplyCollateral \
-    --rpc-url $YOUR_RPC_URL \
+    --rpc-url $ETH_RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast
 ```
@@ -25,7 +25,7 @@ forge script scripts/SupplyMorphoCollateral.s.sol:SupplyCollateral \
 export SUPPLY_AMOUNT=5000000000000000000
 
 forge script scripts/SupplyMorphoCollateral.s.sol:SupplyCollateral \
-    --rpc-url $YOUR_RPC_URL \
+    --rpc-url $ETH_RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast
 ```
@@ -33,7 +33,7 @@ forge script scripts/SupplyMorphoCollateral.s.sol:SupplyCollateral \
 ### Dry Run (Simulation)
 ```bash
 forge script scripts/SupplyMorphoCollateral.s.sol:SupplyCollateral \
-    --rpc-url $YOUR_RPC_URL \
+    --rpc-url $ETH_RPC_URL \
     --private-key $PRIVATE_KEY
 ```
 
