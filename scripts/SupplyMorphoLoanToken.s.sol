@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "../lib/forge-std/src/Script.sol";
+import "../lib/forge-std/src/console2.sol";
 
 // IERC20 interface for token operations
 interface IERC20 {
@@ -82,73 +83,80 @@ contract SupplyMorphoLoanToken is Script {
             tokenSymbol = "TOKEN";
         }
 
-        console.log("=== Supplying Loan Token to Morpho Market ===");
-        console.log("Chain ID:", block.chainid);
-        console.log("Morpho contract:", morphoContract);
-        console.log("Market ID:", vm.toString(marketId));
-        console.log("Loan token:", marketParams.loanToken);
-        console.log("Token symbol:", tokenSymbol);
-        console.log("User address:", user);
-        console.log("Supply amount:", supplyAmount);
+        console2.log("=== Supplying Loan Token to Morpho Market ===");
+        console2.log("Chain ID:", block.chainid);
+        console2.log("Morpho contract:", morphoContract);
+        console2.log("Market ID:", vm.toString(marketId));
+        console2.log("Loan token:", marketParams.loanToken);
+        console2.log("Token symbol:", tokenSymbol);
+        console2.log("User address:", user);
+        console2.log("Supply amount:", supplyAmount);
 
-        // Check loan token balance
-        uint256 balance = loanToken.balanceOf(user);
-        console.log("Token balance:", balance);
+        // Check loan token balance (user and script)
+        uint256 userBalance = loanToken.balanceOf(user);
+        uint256 senderBalance = loanToken.balanceOf(address(this));
+        console2.log("User token balance:", userBalance);
+        console2.log("Script contract token balance (should be 0):", senderBalance);
 
-        require(balance >= supplyAmount, "Insufficient token balance");
+        require(userBalance >= supplyAmount, "Insufficient token balance");
 
         // Check current allowance
         uint256 currentAllowance = loanToken.allowance(user, morphoContract);
-        console.log("Current allowance:", currentAllowance);
+        console2.log("Current allowance (user -> Morpho):", currentAllowance);
 
-        vm.startBroadcast();
+        // Broadcast from user key
+        vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
         // Approve if needed
         if (currentAllowance < supplyAmount) {
-            console.log("Approving token spend...");
+            console2.log("Approving token spend from user:", user);
+            console2.log("Approve amount:", supplyAmount);
             bool success = loanToken.approve(morphoContract, supplyAmount);
             require(success, "Approval failed");
-            console.log("Approval successful");
+            console2.log("Approval successful");
         } else {
-            console.log("Sufficient allowance already exists");
+            console2.log("Sufficient allowance already exists");
         }
+        // Re-check allowance
+        uint256 allowanceAfter = loanToken.allowance(user, morphoContract);
+        console2.log("Allowance after approve (user -> Morpho):", allowanceAfter);
 
         // Check position before supply
         IMorpho morpho = IMorpho(morphoContract);
         (uint256 supplySharesBefore, uint128 borrowSharesBefore, uint128 collateralBefore) = morpho.position(marketId, user);
-        
-        console.log("\n=== Position Before Supply ===");
-        console.log("Supply shares:", supplySharesBefore);
-        console.log("Borrow shares:", borrowSharesBefore);
-        console.log("Collateral:", collateralBefore);
-        
+
+        console2.log("\n=== Position Before Supply ===");
+        console2.log("Supply shares:", supplySharesBefore);
+        console2.log("Borrow shares:", borrowSharesBefore);
+        console2.log("Collateral:", collateralBefore);
+
         // Supply loan token (using 0 for shares means we want to supply exact assets)
-        console.log("\n=== Supplying Loan Token ===");
+        console2.log("\n=== Supplying Loan Token ===");
         try morpho.supply(marketParams, supplyAmount, 0, user, "") returns (uint256 assetsSupplied, uint256 sharesReturned) {
-            console.log("Loan token supplied successfully!");
-            console.log("Assets supplied:", assetsSupplied);
-            console.log("Shares returned:", sharesReturned);
+            console2.log("Loan token supplied successfully!");
+            console2.log("Assets supplied:", assetsSupplied);
+            console2.log("Shares returned:", sharesReturned);
         } catch Error(string memory reason) {
-            console.log("Supply failed:", reason);
+            console2.log("Supply failed:", reason);
             revert(reason);
         } catch (bytes memory lowLevelData) {
-            console.log("Supply failed with low-level error");
-            console.logBytes(lowLevelData);
+            console2.log("Supply failed with low-level error");
+            console2.logBytes(lowLevelData);
             revert("Supply failed");
         }
 
         // Check position after supply
         (uint256 supplySharesAfter, uint128 borrowSharesAfter, uint128 collateralAfter) = morpho.position(marketId, user);
 
-        console.log("\n=== Position After Supply ===");
-        console.log("Supply shares:", supplySharesAfter);
-        console.log("Borrow shares:", borrowSharesAfter);
-        console.log("Collateral:", collateralAfter);
+        console2.log("\n=== Position After Supply ===");
+        console2.log("Supply shares:", supplySharesAfter);
+        console2.log("Borrow shares:", borrowSharesAfter);
+        console2.log("Collateral:", collateralAfter);
 
-        console.log("\n=== Supply Summary ===");
-        console.log("Supply shares added:", supplySharesAfter - supplySharesBefore);
-        console.log("Total supply shares:", supplySharesAfter);
-        console.log(tokenSymbol, "supplied to market for borrowers");
+        console2.log("\n=== Supply Summary ===");
+        console2.log("Supply shares added:", supplySharesAfter - supplySharesBefore);
+        console2.log("Total supply shares:", supplySharesAfter);
+        console2.log(tokenSymbol, "supplied to market for borrowers");
 
         vm.stopBroadcast();
 
@@ -161,12 +169,12 @@ contract SupplyMorphoLoanToken is Script {
             collateralSymbol = "COLLATERAL_TOKEN";
         }
 
-        console.log("\n=== Next Steps ===");
-        console.log("1. Your", tokenSymbol, "is now available for borrowers to borrow");
-        console.log("2. You will earn interest as borrowers pay interest");
-        console.log("3. You can withdraw your", tokenSymbol, "(subject to utilization)");
-        console.log("4. Monitor market utilization and interest rates");
-        console.log("5. Borrowers will use", collateralSymbol, "as collateral");
-        console.log("6. Market ID for reference:", vm.toString(marketId));
+        console2.log("\n=== Next Steps ===");
+        console2.log("1. Your", tokenSymbol, "is now available for borrowers to borrow");
+        console2.log("2. You will earn interest as borrowers pay interest");
+        console2.log("3. You can withdraw your", tokenSymbol, "(subject to utilization)");
+        console2.log("4. Monitor market utilization and interest rates");
+        console2.log("5. Borrowers will use", collateralSymbol, "as collateral");
+        console2.log("6. Market ID for reference:", vm.toString(marketId));
     }
 }
