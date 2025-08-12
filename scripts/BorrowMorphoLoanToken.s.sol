@@ -101,22 +101,22 @@ contract BorrowMorphoLoanToken is Script {
             collateralTokenSymbol = "COLLATERAL_TOKEN";
         }
 
-        console.log("=== Borrowing Loan Token from Morpho Market ===");
+        console2.log("=== Borrowing Loan Token from Morpho Market ===");
         console2.log("Chain ID:", block.chainid);
-        console.log("Morpho contract:", morphoContract);
-        console.log("Market ID:", vm.toString(marketId));
-        console.log("Loan token:", marketParams.loanToken);
-        console.log("Loan token symbol:", loanTokenSymbol);
-        console.log("Collateral token:", marketParams.collateralToken);
-        console.log("Collateral token symbol:", collateralTokenSymbol);
-        console.log("User address:", user);
+        console2.log("Morpho contract:", morphoContract);
+        console2.log("Market ID:", vm.toString(marketId));
+        console2.log("Loan token:", marketParams.loanToken);
+        console2.log("Loan token symbol:", loanTokenSymbol);
+        console2.log("Collateral token:", marketParams.collateralToken);
+        console2.log("Collateral token symbol:", collateralTokenSymbol);
+        console2.log("User address:", user);
         console2.log("Borrow amount:", borrowAmount);
 
         // Check current position
         IMorpho morpho = IMorpho(morphoContract);
         (uint256 supplySharesBefore, uint128 borrowSharesBefore, uint128 collateralBefore) = morpho.position(marketId, user);
 
-        console.log("\n=== Current Position ===");
+        console2.log("\n=== Current Position ===");
         console2.log("Supply shares:", supplySharesBefore);
         console2.log("Borrow shares:", borrowSharesBefore);
         console2.log("Collateral:", collateralBefore);
@@ -131,7 +131,7 @@ contract BorrowMorphoLoanToken is Script {
             currentPrice = price;
             console2.log("Current oracle price (scaled by 1e36):", currentPrice);
         } catch {
-            console.log("Warning: Could not fetch oracle price");
+            console2.log("Warning: Could not fetch oracle price");
             currentPrice = 1e36; // Fallback to 1:1 ratio
         }
 
@@ -157,27 +157,27 @@ contract BorrowMorphoLoanToken is Script {
         uint256 loanTokenBalanceBefore = loanToken.balanceOf(user);
         console2.log(loanTokenSymbol, "balance before borrow:", loanTokenBalanceBefore);
         
-        vm.startBroadcast();
+        vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
         
         // Borrow loan token (using 0 for shares means we want to borrow exact assets)
-        console.log("\n=== Borrowing", loanTokenSymbol, "===");
+        console2.log("\n=== Borrowing", loanTokenSymbol, "===");
         try morpho.borrow(marketParams, borrowAmount, 0, user, user) returns (uint256 assetsBorrowed, uint256 sharesBorrowed) {
-            console.log(loanTokenSymbol, "borrowed successfully!");
+            console2.log(loanTokenSymbol, "borrowed successfully!");
             console2.log("Assets borrowed:", assetsBorrowed);
             console2.log("Shares borrowed:", sharesBorrowed);
         } catch Error(string memory reason) {
-            console.log("Borrow failed:", reason);
+            console2.log("Borrow failed:", reason);
             revert(reason);
         } catch (bytes memory lowLevelData) {
-            console.log("Borrow failed with low-level error");
-            console.logBytes(lowLevelData);
+            console2.log("Borrow failed with low-level error");
+            console2.logBytes(lowLevelData);
             revert("Borrow failed");
         }
 
         // Check position after borrow
         (uint256 supplySharesAfter, uint128 borrowSharesAfter, uint128 collateralAfter) = morpho.position(marketId, user);
 
-        console.log("\n=== Position After Borrow ===");
+        console2.log("\n=== Position After Borrow ===");
         console2.log("Supply shares:", supplySharesAfter);
         console2.log("Borrow shares:", borrowSharesAfter);
         console2.log("Collateral:", collateralAfter);
@@ -186,7 +186,7 @@ contract BorrowMorphoLoanToken is Script {
         uint256 loanTokenBalanceAfter = loanToken.balanceOf(user);
         console2.log(loanTokenSymbol, "balance after borrow:", loanTokenBalanceAfter);
 
-        console.log("\n=== Borrow Summary ===");
+        console2.log("\n=== Borrow Summary ===");
         console2.log("Borrow shares added:", borrowSharesAfter - borrowSharesBefore);
         console2.log("Total borrow shares:", borrowSharesAfter);
         console2.log(loanTokenSymbol, "received:", loanTokenBalanceAfter - loanTokenBalanceBefore);
@@ -194,15 +194,15 @@ contract BorrowMorphoLoanToken is Script {
 
         vm.stopBroadcast();
 
-        console.log("\n=== Important Notes ===");
-        console.log("1. You now owe", loanTokenSymbol, "that accrues interest over time");
-        console.log("2. Monitor your position health factor regularly");
-        console.log("3. If health factor drops below 100%, you risk liquidation");
-        console.log("4. Consider repaying or adding collateral if price moves against you");
-        console.log("5. Use repay scripts to repay the loan");
-        console.log("6. Market ID for reference:", vm.toString(marketId));
+        console2.log("\n=== Important Notes ===");
+        console2.log("1. You now owe", loanTokenSymbol, "that accrues interest over time");
+        console2.log("2. Monitor your position health factor regularly");
+        console2.log("3. If health factor drops below 100%, you risk liquidation");
+        console2.log("4. Consider repaying or adding collateral if price moves against you");
+        console2.log("5. Use repay scripts to repay the loan");
+        console2.log("6. Market ID for reference:", vm.toString(marketId));
 
-        console.log("\n=== Risk Management ===");
+        console2.log("\n=== Risk Management ===");
         console2.log("Current LTV:", (borrowAmount * 1e18) / maxBorrowable, "/ 1e18");
         console2.log("Liquidation threshold:", lltvPercent, "%");
         console2.log("Recommended: Keep LTV below", (lltvPercent - 10), "% for safety buffer");
