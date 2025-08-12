@@ -19,7 +19,7 @@ contract BaseWstUsrUsdcOracleTest is Test {
 
     function setUp() public {
         // Fork Base network at specific block for consistent testing
-        vm.createSelectFork(vm.envString("BASE_RPC_URL"), 31819496);
+        vm.createSelectFork(vm.envString("BASE_RPC_URL"), 8453);
         require(block.chainid == BASE_CHAIN_ID, "chain isn't Base");
 
         // Use existing factory on Base
