@@ -31,4 +31,4 @@ uint256 constant WSTUSR_DECIMALS = 18; // wstUSR has 18 decimals
 uint256 constant USDC_DECIMALS = 6;    // USDC has 6 decimals on Base
 
 // Correct wstUSR token address on Base
-address constant WSTUSR_TOKEN = 0xb67675158b412d53fe6b68946483ba920b135ba1;
+address constant WSTUSR_TOKEN = 0xB67675158B412D53fe6B68946483ba920b135bA1;
