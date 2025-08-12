@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "../lib/forge-std/src/Script.sol";
+import "../lib/forge-std/src/console2.sol";
 
 // IERC20 interface for token operations
 interface IERC20 {
@@ -35,13 +36,15 @@ interface IMorpho {
 contract SupplyCollateral is Script {
     
     function getSupplyAmount(address user, address collateralToken) internal view returns (uint256) {
-        try vm.envUint("SUPPLY_AMOUNT") returns (uint256 amount) {
-            return amount;
-        } catch {
-            // Use full balance if no amount specified
-            IERC20 token = IERC20(collateralToken);
-            return token.balanceOf(user);
-        }
+        // try vm.envUint("SUPPLY_AMOUNT") returns (uint256 amount) {
+        //     return amount;
+        // } catch {
+        //     // Use full balance if no amount specified
+        //     IERC20 token = IERC20(collateralToken);
+        //     return token.balanceOf(user);
+        // }
+        IERC20 token = IERC20(collateralToken);
+        return token.balanceOf(user);
     }
 
     function getMarketParams() internal view returns (IMorpho.MarketParams memory) {
@@ -81,70 +84,77 @@ contract SupplyCollateral is Script {
             tokenSymbol = "TOKEN";
         }
 
-        console.log("=== Supplying Collateral to Morpho ===");
-        console.log("Chain ID:", block.chainid);
-        console.log("Morpho contract:", morphoContract);
-        console.log("Market ID:", vm.toString(marketId));
-        console.log("Collateral token:", marketParams.collateralToken);
-        console.log("Token symbol:", tokenSymbol);
-        console.log("User address:", user);
-        console.log("Supply amount:", supplyAmount);
+        console2.log("=== Supplying Collateral to Morpho ===");
+        console2.log("Chain ID:", block.chainid);
+        console2.log("Morpho contract:", morphoContract);
+        console2.log("Market ID:", vm.toString(marketId));
+        console2.log("Collateral token:", marketParams.collateralToken);
+        console2.log("Token symbol:", tokenSymbol);
+        console2.log("User address:", user);
+        console2.log("Supply amount:", supplyAmount);
 
-        // Check collateral balance
-        uint256 balance = collateralToken.balanceOf(user);
-        console.log("Token balance:", balance);
+        // Check collateral balance for the intended user and current msg.sender
+        uint256 userBalance = collateralToken.balanceOf(user);
+        uint256 senderBalance = collateralToken.balanceOf(address(this));
+        console2.log("User token balance:", userBalance);
+        console2.log("Script contract token balance (should be 0):", senderBalance);
 
-        require(balance >= supplyAmount, "Insufficient token balance");
+        require(userBalance >= supplyAmount, "Insufficient token balance");
 
         // Check current allowance
         uint256 currentAllowance = collateralToken.allowance(user, morphoContract);
-        console.log("Current allowance:", currentAllowance);
+        console2.log("Current allowance (user -> Morpho):", currentAllowance);
 
-        vm.startBroadcast();
+        // Broadcast from the intended user key so msg.sender == user
+        vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
-        // Approve if needed
+        // Approve if needed (from user)
         if (currentAllowance < supplyAmount) {
-            console.log("Approving token spend...");
+            console2.log("Approving token spend from user:", user);
+            console2.log("Approve amount:", supplyAmount);
             bool success = collateralToken.approve(morphoContract, supplyAmount);
             require(success, "Approval failed");
-            console.log("Approval successful");
+            console2.log("Approval successful");
         } else {
-            console.log("Sufficient allowance already exists");
+            console2.log("Sufficient allowance already exists");
         }
+        // Re-check allowance after potential approve
+        uint256 allowanceAfter = collateralToken.allowance(user, morphoContract);
+        console2.log("Allowance after approve (user -> Morpho):", allowanceAfter);
 
         // Check position before supply
         IMorpho morpho = IMorpho(morphoContract);
         (uint256 supplySharesBefore, uint128 borrowSharesBefore, uint128 collateralBefore) = morpho.position(marketId, user);
 
-        console.log("\n=== Position Before Supply ===");
-        console.log("Supply shares:", supplySharesBefore);
-        console.log("Borrow shares:", borrowSharesBefore);
-        console.log("Collateral:", collateralBefore);
+        console2.log("\n=== Position Before Supply ===");
+        console2.log("Supply shares:", supplySharesBefore);
+        console2.log("Borrow shares:", borrowSharesBefore);
+        console2.log("Collateral:", collateralBefore);
 
         // Supply collateral
-        console.log("\n=== Supplying Collateral ===");
+        console2.log("\n=== Supplying Collateral ===");
         try morpho.supplyCollateral(marketParams, supplyAmount, user, "") {
-            console.log("Collateral supplied successfully!");
+            console2.log("Collateral supplied successfully!");
         } catch Error(string memory reason) {
-            console.log("Supply failed:", reason);
+            console2.log("Supply failed:", reason);
             revert(reason);
         } catch (bytes memory lowLevelData) {
-            console.log("Supply failed with low-level error");
-            console.logBytes(lowLevelData);
+            console2.log("Supply failed with low-level error");
+            console2.logBytes(lowLevelData);
             revert("Supply failed");
         }
 
         // Check position after supply
         (uint256 supplySharesAfter, uint128 borrowSharesAfter, uint128 collateralAfter) = morpho.position(marketId, user);
 
-        console.log("\n=== Position After Supply ===");
-        console.log("Supply shares:", supplySharesAfter);
-        console.log("Borrow shares:", borrowSharesAfter);
-        console.log("Collateral:", collateralAfter);
+        console2.log("\n=== Position After Supply ===");
+        console2.log("Supply shares:", supplySharesAfter);
+        console2.log("Borrow shares:", borrowSharesAfter);
+        console2.log("Collateral:", collateralAfter);
 
-        console.log("\n=== Supply Summary ===");
-        console.log("Collateral added:", collateralAfter - collateralBefore);
-        console.log("Total collateral:", collateralAfter);
+        console2.log("\n=== Supply Summary ===");
+        console2.log("Collateral added:", collateralAfter - collateralBefore);
+        console2.log("Total collateral:", collateralAfter);
 
         vm.stopBroadcast();
 
@@ -157,11 +167,11 @@ contract SupplyCollateral is Script {
             loanTokenSymbol = "LOAN_TOKEN";
         }
 
-        console.log("\n=== Next Steps ===");
-        console.log("1. You can now borrow", loanTokenSymbol, "against this collateral");
-        console.log("2. Maximum borrowable: Calculate based on oracle price and LLTV");
-        console.log("3. Monitor your position health");
-        console.log("4. Use borrow scripts to borrow against your collateral");
-        console.log("5. Market ID for reference:", vm.toString(marketId));
+        console2.log("\n=== Next Steps ===");
+        console2.log("1. You can now borrow", loanTokenSymbol, "against this collateral");
+        console2.log("2. Maximum borrowable: Calculate based on oracle price and LLTV");
+        console2.log("3. Monitor your position health");
+        console2.log("4. Use borrow scripts to borrow against your collateral");
+        console2.log("5. Market ID for reference:", vm.toString(marketId));
     }
 }
