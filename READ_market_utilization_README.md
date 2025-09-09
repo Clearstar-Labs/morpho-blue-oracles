@@ -9,6 +9,11 @@ forge script scripts/ReadMarketUtilization.s.sol:ReadMarketUtilization \
     --rpc-url https://mainnet.base.org
 ```
 
+```bash
+forge script scripts/ReadMarketUtilization.s.sol:ReadMarketUtilization \
+    --rpc-url $ETH_RPC_URL
+```
+
 Note: This is a read-only script, so no `--private-key` or `--broadcast` is needed.
 
 ## What the Script Shows
