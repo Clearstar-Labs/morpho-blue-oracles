@@ -59,7 +59,21 @@ contract DeployMorphoMarket is Script {
         
         console.log("\n=== Creating Market ===");
         
-        vm.startBroadcast();
+        bool doBroadcast;
+        try vm.envBool("SCRIPT_BROADCAST") returns (bool b) {
+            doBroadcast = b;
+        } catch {
+            doBroadcast = true;
+        }
+
+        if (doBroadcast) {
+            // Prefer explicit private key if provided
+            try vm.envUint("PRIVATE_KEY") returns (uint256 pk) {
+                vm.startBroadcast(pk);
+            } catch {
+                vm.startBroadcast();
+            }
+        }
         
         try morpho.createMarket(marketParams) {
             console.log("Market created successfully!");
@@ -96,7 +110,7 @@ contract DeployMorphoMarket is Script {
         
         console.log("\n[SUCCESS] All parameters verified successfully!");
         
-        vm.stopBroadcast();
+        if (doBroadcast) vm.stopBroadcast();
         
         // Market information
         console.log("\n=== Market Summary ===");
