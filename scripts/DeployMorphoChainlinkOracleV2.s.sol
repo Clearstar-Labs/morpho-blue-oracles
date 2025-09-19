@@ -36,6 +36,8 @@ interface IOracle { function price() external view returns (uint256); }
 interface IERC4626Minimal { function convertToAssets(uint256 shares) external view returns (uint256); }
 
 contract DeployMorphoChainlinkOracleV2 is Script {
+    // Expose last deployed oracle for tests/integration
+    address public latestOracle;
     
     function getTokenInfo(address token) internal view returns (string memory symbol, uint8 decimals) {
         try IERC20(token).symbol() returns (string memory _symbol) {
@@ -168,8 +170,22 @@ contract DeployMorphoChainlinkOracleV2 is Script {
         console2.log("Salt:", vm.toString(salt));
 
 
-        
-        vm.startBroadcast();
+        // Allow disabling broadcast in tests via env var
+        bool doBroadcast;
+        try vm.envBool("SCRIPT_BROADCAST") returns (bool b) {
+            doBroadcast = b;
+        } catch {
+            doBroadcast = true;
+        }
+
+        if (doBroadcast) {
+            // Prefer explicit private key if available, else default
+            try vm.envUint("PRIVATE_KEY") returns (uint256 pk) {
+                vm.startBroadcast(pk);
+            } catch {
+                vm.startBroadcast();
+            }
+        }
         
         // Deploy oracle using factory
         IMorphoChainlinkOracleV2Factory factoryContract = IMorphoChainlinkOracleV2Factory(factory);
@@ -205,7 +221,10 @@ contract DeployMorphoChainlinkOracleV2 is Script {
         bool isValidOracle = factoryContract.isMorphoChainlinkOracleV2(oracle);
         require(isValidOracle, "Oracle verification failed");
         
-        vm.stopBroadcast();
+        if (doBroadcast) vm.stopBroadcast();
+
+        // Record latest oracle for tests/consumers
+        latestOracle = oracle;
 
         // Post-deploy sanity checks
         // - If base feeds and quote feeds are zero addresses and quote vault is zero,
@@ -228,8 +247,8 @@ contract DeployMorphoChainlinkOracleV2 is Script {
         console2.log("Oracle Type: MorphoChainlinkOracleV2");
         console2.log("Base Token:", baseSymbol);
         console2.log("Quote Token:", quoteSymbol);
-        console.log("Base Vault Conversion Sample:", baseVaultConversionSample);
-        console.log("Quote Vault Conversion Sample:", quoteVaultConversionSample);
+        console2.log("Base Vault Conversion Sample:", baseVaultConversionSample);
+        console2.log("Quote Vault Conversion Sample:", quoteVaultConversionSample);
         console2.log("Computed Expected Price (if applicable):", expectedPrice);
         console2.log("Oracle Price:", oraclePrice);
         console2.log("Computed Expected Price (if applicable):", expectedPrice);
@@ -240,12 +259,12 @@ contract DeployMorphoChainlinkOracleV2 is Script {
         console2.log("\n=== Integration Details ===");
         console2.log("Use this oracle address in your Morpho market:");
         console2.log("ORACLE_ADDRESS=", oracle);
-        console.log("Factory:", factory);
+        console2.log("Factory:", factory);
         
-        console.log("\n=== Next Steps ===");
-        console.log("1. Test the oracle by calling price() function");
-        console.log("2. Use this oracle address in your market deployment");
-        console.log("3. Verify the oracle is returning expected prices");
-        console.log("4. Deploy your Morpho market with this oracle");
+        console2.log("\n=== Next Steps ===");
+        console2.log("1. Test the oracle by calling price() function");
+        console2.log("2. Use this oracle address in your market deployment");
+        console2.log("3. Verify the oracle is returning expected prices");
+        console2.log("4. Deploy your Morpho market with this oracle");
     }
 }

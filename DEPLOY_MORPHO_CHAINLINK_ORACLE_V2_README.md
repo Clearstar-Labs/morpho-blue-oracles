@@ -63,6 +63,17 @@ forge script scripts/DeployMorphoChainlinkOracleV2.s.sol:DeployMorphoChainlinkOr
     --broadcast
 ```
 
+### Hemi Deployment
+
+If deploying on Hemi, set `HEMI_RPC_URL` and use it for `--rpc-url`. Ensure you have deployed or set the factory address for Hemi.
+
+```bash
+forge script scripts/DeployMorphoChainlinkOracleV2.s.sol:DeployMorphoChainlinkOracleV2 \
+    --rpc-url $HEMI_RPC_URL \
+    --private-key $PRIVATE_KEY \
+    --broadcast
+```
+
 ### Dry Run (Simulation)
 ```bash
 forge script scripts/DeployMorphoChainlinkOracleV2.s.sol:DeployMorphoChainlinkOracleV2 \
